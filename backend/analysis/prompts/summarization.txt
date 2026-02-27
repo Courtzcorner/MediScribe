@@ -1,0 +1,7 @@
+Summarise the following medical consultation in 2-3 concise sentences suitable for a clinical record.
+Focus on:
+- The primary reason for the visit (chief complaint)
+- Key findings or diagnoses
+- The main treatment or management plan
+
+Return only the summary text, no additional formatting.

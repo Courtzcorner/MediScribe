@@ -1,0 +1,24 @@
+Generate a clinical SOAP note from the following doctor-patient consultation transcript.
+
+SOAP Note format:
+- Subjective: Patient's own description of symptoms, history, and chief complaint
+- Objective: Physical examination findings, vital signs, and test results mentioned
+- Assessment: Clinical diagnosis or differential diagnoses with reasoning
+- Plan: Treatment plan including medications, orders, referrals, and follow-up
+
+Requirements:
+- Use professional medical terminology
+- Be concise but complete
+- Only include information present in the transcript
+- Format each section as a clear paragraph
+
+Return a JSON object:
+{
+  "subjective": "...",
+  "objective": "...",
+  "assessment": "...",
+  "plan": "..."
+}
+
+TRANSCRIPT:
+{transcript}

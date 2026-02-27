@@ -1,0 +1,20 @@
+Extract the following structured clinical data from the transcript below.
+Return a JSON object with these fields:
+
+{
+  "medications": [{"name": "", "dosage": "", "frequency": "", "duration": null, "route": null, "instructions": null}],
+  "diagnoses": [{"condition": "", "icd_code": null, "severity": null, "status": "new"}],
+  "vitals": {"blood_pressure": null, "heart_rate": null, "temperature": null, "weight": null, "height": null, "o2_sat": null},
+  "allergies": [],
+  "lab_results": [],
+  "procedures_discussed": []
+}
+
+Rules:
+- Only extract information explicitly stated in the transcript.
+- Use null for any field not mentioned.
+- For ICD-10 codes, only include if you are highly confident.
+- Do not invent or infer information.
+
+TRANSCRIPT:
+{transcript}
