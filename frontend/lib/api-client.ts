@@ -1,4 +1,6 @@
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+// Use Next.js proxy (/api/backend) to avoid CORS and "Failed to fetch" from direct backend calls.
+// Set NEXT_PUBLIC_API_BASE=http://localhost:8000 to bypass proxy and call backend directly.
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api/backend'
 
 type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown

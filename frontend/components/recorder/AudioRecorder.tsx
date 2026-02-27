@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { CheckCircle, RotateCcw, Loader2 } from 'lucide-react'
 import { useRecorder } from '@/hooks/useRecorder'
 import { useAnalysis } from '@/hooks/useAnalysis'
 import { Session } from '@/types/session'
@@ -30,8 +31,13 @@ export default function AudioRecorder({ session, onComplete }: AudioRecorderProp
     done: 'Complete!',
   }
 
-  const handleStop = async () => {
+  // Just stops the MediaRecorder — audioBlob is set asynchronously in onstop
+  const handleStop = () => {
     recorder.stopRecording()
+  }
+
+  // Triggered explicitly by the "Complete Encounter" button once blob is ready
+  const handleComplete = async () => {
     if (!recorder.audioBlob) return
 
     setError(null)
@@ -57,6 +63,9 @@ export default function AudioRecorder({ session, onComplete }: AudioRecorderProp
     }
   }
 
+  const isProcessing = stage !== 'record'
+  const isStopped = recorder.state === 'stopped'
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
       <div className="text-center mb-6">
@@ -67,15 +76,60 @@ export default function AudioRecorder({ session, onComplete }: AudioRecorderProp
       <WaveformVisualizer isRecording={recorder.state === 'recording'} />
 
       <div className="flex justify-center mt-8">
-        <RecordingControls
-          state={recorder.state}
-          duration={recorder.formattedDuration}
-          onStart={recorder.startRecording}
-          onStop={handleStop}
-          onPause={recorder.pauseRecording}
-          onResume={recorder.resumeRecording}
-          disabled={stage !== 'record'}
-        />
+        {isProcessing ? (
+          /* Processing stages — hide controls, show spinner */
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+            <p className="text-sm text-gray-500">{stageLabel[stage]}</p>
+          </div>
+        ) : isStopped ? (
+          /* Stopped — show Complete Encounter card */
+          <div className="flex flex-col items-center gap-4 w-full max-w-xs">
+            <div className="text-center">
+              <p className="font-mono text-3xl font-bold text-gray-900 tabular-nums">
+                {recorder.formattedDuration}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Recording complete</p>
+            </div>
+
+            <button
+              onClick={handleComplete}
+              disabled={!recorder.audioBlob}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {recorder.audioBlob ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  Complete Encounter &amp; Analyze
+                </>
+              ) : (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Preparing…
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={recorder.resetRecording}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Re-record
+            </button>
+          </div>
+        ) : (
+          /* Idle / recording / paused — show normal controls */
+          <RecordingControls
+            state={recorder.state}
+            duration={recorder.formattedDuration}
+            onStart={recorder.startRecording}
+            onStop={handleStop}
+            onPause={recorder.pauseRecording}
+            onResume={recorder.resumeRecording}
+            disabled={isProcessing}
+          />
+        )}
       </div>
 
       {error && (

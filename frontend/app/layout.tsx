@@ -1,5 +1,10 @@
 import type { Metadata } from 'next'
+import { DM_Sans, DM_Mono } from 'next/font/google'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import './globals.css'
+
+const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans' })
+const dmMono = DM_Mono({ weight: '400', subsets: ['latin'], variable: '--font-dm-mono' })
 
 export const metadata: Metadata = {
   title: 'MediScribe — AI Medical Transcription',
@@ -8,9 +13,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-50 text-gray-900 antialiased min-h-screen">
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${dmSans.variable} ${dmMono.variable} font-sans antialiased min-h-screen`}>
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )

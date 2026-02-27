@@ -65,14 +65,7 @@ class NovaTranscribeClient:
                     "ShowSpeakerLabels": True,
                     "MaxSpeakerLabels": num_speakers,
                     "ShowAlternatives": False,
-                    "VocabularyFilterMethod": "mask",
                 },
-                ContentRedaction={
-                    "RedactionType": "PII",
-                    "RedactionOutput": "redacted",
-                },
-                Specialty="PRIMARYCARE",
-                Type="DICTATION",
             )
             logger.info("transcription_job_started", job_name=job_name, session_id=session_id)
             return job_name
@@ -90,7 +83,10 @@ class NovaTranscribeClient:
             status = job["TranscriptionJobStatus"]
 
             if status == "COMPLETED":
-                transcript_uri = job["Transcript"]["RedactedTranscriptFileUri"]
+                transcript_uri = job["Transcript"].get(
+                    "RedactedTranscriptFileUri",
+                    job["Transcript"]["TranscriptFileUri"],
+                )
                 return self._fetch_transcript_json(transcript_uri)
             elif status == "FAILED":
                 reason = job.get("FailureReason", "Unknown")

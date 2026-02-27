@@ -19,12 +19,34 @@ _bearer = HTTPBearer(auto_error=False)
 
 PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
 
+# MVP: allow unauthenticated access to core API (sessions, transcribe, analyze)
+PUBLIC_PATH_PREFIXES = ("/sessions", "/transcribe", "/analyze")
+
+
+def _is_public_path(path: str) -> bool:
+    if path in PUBLIC_PATHS:
+        return True
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in PUBLIC_PATH_PREFIXES)
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Global middleware that validates JWT on protected routes."""
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in PUBLIC_PATHS or request.method == "OPTIONS":
+        if _is_public_path(request.url.path) or request.method == "OPTIONS":
+            # MVP: inject default user when no token on public API paths
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1]
+                try:
+                    payload = jwt.decode(
+                        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+                    )
+                    request.state.user = payload
+                except JWTError:
+                    request.state.user = {"sub": "mvp-user"}
+            else:
+                request.state.user = {"sub": "mvp-user"}
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
@@ -49,6 +71,9 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict:
     """FastAPI dependency to get the current authenticated user."""
+    # MVP: use user from middleware for public API paths (sessions, transcribe, analyze)
+    if _is_public_path(request.url.path) and hasattr(request.state, "user"):
+        return request.state.user
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
