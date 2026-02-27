@@ -47,12 +47,9 @@ async def stream_analysis(
 
     # Build a minimal transcript object for the orchestrator
     # In production this would be fetched from DB by transcript_id
-    transcript = Transcript(
-        id=payload.transcript_id,
-        session_id=payload.session_id,
-        raw_text="",  # orchestrator will use segments
-        segments=[],
-    )
+    transcript = db.get_transcript(payload.transcript_id)
+    if transcript.session_id != payload.session_id:
+        raise NotFoundError("Transcript does not belong to this session")
 
     async def event_generator():
         try:

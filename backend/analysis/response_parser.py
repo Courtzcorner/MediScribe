@@ -1,6 +1,10 @@
 """
 Parse Claude's JSON output into strongly-typed AnalysisResult models.
-Claude is instructed to return structured JSON; this module validates it.
+
+Claude is instructed to return structured JSON; this module:
+- strips markdown code fences
+- tolerates mildly malformed JSON where possible
+- falls back gracefully to a minimal AnalysisResult if parsing fails.
 """
 from __future__ import annotations
 
@@ -17,7 +21,6 @@ from backend.models.analysis_result import (
     DiagnosisStatus,
 )
 from backend.utils.logger import get_logger
-from backend.utils.error_handler import AnalysisError
 
 logger = get_logger(__name__)
 
@@ -28,14 +31,31 @@ class ResponseParser:
     def parse(self, raw_text: str, session_id: str, transcript_id: str, model_id: str) -> AnalysisResult:
         """
         Parse *raw_text* (Claude's full response) into an AnalysisResult.
-        Expects a JSON block wrapped in ```json ... ``` or bare JSON.
+
+        Expects a JSON block wrapped in ```json ... ``` or bare JSON, but will:
+        - strip common markdown code fences
+        - attempt to locate the first {...} block
+        - fall back to a minimal AnalysisResult if JSON is not parseable.
         """
         json_str = self._extract_json(raw_text)
+
         try:
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
+            # Log and fall back rather than raising; this keeps the pipeline
+            # usable even if the model emits slightly malformed JSON.
             logger.error("json_parse_failed", raw=raw_text[:500], error=str(e))
-            raise AnalysisError(f"Failed to parse Claude response as JSON: {e}") from e
+            return AnalysisResult(
+                session_id=session_id,
+                transcript_id=transcript_id,
+                model_used=model_id,
+                summary=raw_text.strip(),
+                disclaimer=(
+                    "AI-generated content could not be parsed as structured JSON. "
+                    "Treat this summary as rough notes only and rely on clinician "
+                    "judgment and formal documentation."
+                ),
+            )
 
         return AnalysisResult(
             session_id=session_id,
@@ -48,22 +68,34 @@ class ResponseParser:
             follow_up=self._parse_follow_up(data.get("follow_up")),
             key_points=data.get("key_points", []),
             patient_instructions=data.get("patient_instructions"),
+            suggested_questions=data.get("suggested_questions", []) or [],
+            key_findings=data.get("key_findings", []) or [],
+            red_flags=data.get("red_flags", []) or [],
+            icd10_suggestions=data.get("icd10_suggestions", []) or [],
+            disclaimer=data.get("disclaimer"),
         )
 
     # ── Private ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def _extract_json(text: str) -> str:
-        # Try to find a JSON code block first
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        """Extract a JSON object from raw model text, stripping code fences."""
+        # Normalise whitespace
+        stripped = text.strip()
+
+        # Try to find a ```json ... ``` or ``` ... ``` fenced block first
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, re.DOTALL)
         if match:
-            return match.group(1)
+            return match.group(1).strip()
+
         # Fall back to finding the first { ... } block
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1:
-            return text[start : end + 1]
-        return text  # Let json.loads raise the error
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return stripped[start : end + 1].strip()
+
+        # As a last resort, return the raw text; caller will attempt json.loads
+        return stripped
 
     @staticmethod
     def _parse_soap(data: dict) -> SOAPNote:
@@ -76,7 +108,7 @@ class ResponseParser:
 
     @staticmethod
     def _parse_medications(items: list[dict]) -> list[Medication]:
-        result = []
+        result: list[Medication] = []
         for item in items:
             try:
                 result.append(
@@ -95,7 +127,7 @@ class ResponseParser:
 
     @staticmethod
     def _parse_diagnoses(items: list[dict]) -> list[Diagnosis]:
-        result = []
+        result: list[Diagnosis] = []
         for item in items:
             try:
                 severity_raw = item.get("severity")
