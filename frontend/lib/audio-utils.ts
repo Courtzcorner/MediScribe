@@ -55,6 +55,6 @@ export function createAudioAnalyser(stream: MediaStream): {
 }
 
 export function getFrequencyData(analyser: AnalyserNode, dataArray: Uint8Array): Uint8Array {
-  analyser.getByteFrequencyData(dataArray)
+  analyser.getByteFrequencyData(dataArray as Uint8Array<ArrayBuffer>)
   return dataArray
 }
