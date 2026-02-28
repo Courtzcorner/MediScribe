@@ -19,8 +19,8 @@ _bearer = HTTPBearer(auto_error=False)
 
 PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
 
-# MVP: allow unauthenticated access to core API (sessions, transcribe, analyze, live-context, auth)
-PUBLIC_PATH_PREFIXES = ("/sessions", "/transcribe", "/analyze", "/live-context", "/auth")
+# MVP: allow unauthenticated access to core API (sessions, patients, transcribe, analyze, live-context, auth)
+PUBLIC_PATH_PREFIXES = ("/sessions", "/patients", "/transcribe", "/analyze", "/live-context", "/auth")
 
 
 def _is_public_path(path: str) -> bool:
