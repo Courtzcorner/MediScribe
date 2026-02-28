@@ -86,6 +86,7 @@ export const api = {
       const error = await res.json().catch(() => ({ detail: 'Upload failed' }))
       throw new Error(error.detail || `HTTP ${res.status}`)
     }
-    return res.json()
+    const json = await res.json()
+    return normalizeResponseBody(json) as T
   },
 }

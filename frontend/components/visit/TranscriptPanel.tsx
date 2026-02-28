@@ -21,7 +21,6 @@ export function TranscriptPanel({
   liveEntries = [],
 }: TranscriptPanelProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
 
   // Only auto-scroll if the user is already near the bottom
   useEffect(() => {
@@ -29,7 +28,7 @@ export function TranscriptPanel({
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     if (distanceFromBottom < 80) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }
   }, [liveEntries.length])
 
@@ -67,7 +66,6 @@ export function TranscriptPanel({
                 <p className="text-sm text-foreground leading-relaxed">{entry.text}</p>
               </div>
             ))}
-            <div ref={bottomRef} />
           </div>
         ) : children ? (
           <div className="flex-1 overflow-hidden">{children}</div>

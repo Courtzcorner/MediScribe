@@ -39,7 +39,7 @@ export default function TranscriptViewer({ transcript, isLoading }: TranscriptVi
     <div className="max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-gray-400">
-          {transcript.wordCount.toLocaleString()} words · {transcript.segments.length} segments
+          {transcript.wordCount != null ? `${transcript.wordCount.toLocaleString()} words · ` : ''}{transcript.segments.length} segments
         </p>
       </div>
 

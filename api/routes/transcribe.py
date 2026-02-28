@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from backend.models.transcript import Transcript
 from backend.pipeline.orchestrator import MedicalPipelineOrchestrator
@@ -39,7 +41,11 @@ async def transcribe_audio(
     audio_bytes = await audio.read()
     ext = (audio.filename or "audio.webm").rsplit(".", 1)[-1].lower()
 
-    transcript, analysis = orchestrator.process_recording(session, audio_bytes, audio_format=ext)
+    # Run the synchronous pipeline in a thread pool so it doesn't block the event loop.
+    # process_recording calls S3, Amazon Transcribe, and Claude — all potentially slow.
+    transcript, analysis = await asyncio.to_thread(
+        orchestrator.process_recording, session, audio_bytes, audio_format=ext
+    )
     db.save_transcript(transcript)
     db.save_analysis(analysis)
     db.save_session(session)

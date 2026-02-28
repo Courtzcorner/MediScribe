@@ -319,7 +319,7 @@ export function SessionVisitLayout({
   }
 
   return (
-    <div className="size-full flex bg-background">
+    <div className="h-screen w-full flex bg-background overflow-hidden">
       <VisitSidebar
         sessionId={sessionId}
         activeItem={sidebarItem}
