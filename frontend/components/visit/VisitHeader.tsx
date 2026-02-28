@@ -40,7 +40,7 @@ export function VisitHeader({
           <span className="font-medium text-muted-foreground">Dashboard</span>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Activity className="size-4" />
-            <span className="text-sm">Echo Health</span>
+            <span className="text-sm">MediScribe</span>
           </div>
         </div>
 
