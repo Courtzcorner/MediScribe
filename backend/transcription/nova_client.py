@@ -40,6 +40,7 @@ class NovaTranscribeClient:
                 {
                     "aws_access_key_id": settings.aws_access_key_id,
                     "aws_secret_access_key": settings.aws_secret_access_key,
+                    **({"aws_session_token": settings.aws_session_token} if settings.aws_session_token and settings.aws_access_key_id.startswith("ASIA") else {}),
                 }
                 if settings.aws_access_key_id
                 else {}

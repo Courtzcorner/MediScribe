@@ -116,15 +116,9 @@ docker-reset: ## Tear down and remove volumes (DESTRUCTIVE)
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
-migrate: ## Run Alembic database migrations
-	@echo "$(GREEN)Running database migrations...$(RESET)"
-	alembic upgrade head
-
-migrate-create: ## Create a new migration (usage: make migrate-create MSG="add users table")
-	alembic revision --autogenerate -m "$(MSG)"
-
-migrate-rollback: ## Rollback one migration
-	alembic downgrade -1
+setup-dynamodb: ## Create DynamoDB tables in AWS
+	@echo "$(GREEN)Creating DynamoDB tables...$(RESET)"
+	python scripts/setup_dynamodb.py
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -140,7 +134,7 @@ clean: ## Remove build artifacts and caches
 	rm -rf coverage/ .coverage
 	cd frontend && rm -rf .next out node_modules/.cache
 
-setup: env install migrate ## First-time project setup (env + install + migrate)
+setup: env install setup-dynamodb ## First-time project setup (env + install + DynamoDB)
 	@echo ""
 	@echo "$(GREEN)✓ MediScribe is ready!$(RESET)"
 	@echo "  Run $(YELLOW)make dev$(RESET) to start the development servers."

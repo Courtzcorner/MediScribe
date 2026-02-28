@@ -22,10 +22,11 @@ async def list_sessions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: DBHandler = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    # current_user: dict = Depends(get_current_user),  # Temporarily disabled
 ):
     """List all sessions for the authenticated doctor."""
-    return db.list_sessions(doctor_id=current_user["sub"], limit=limit, offset=offset)
+    # Use a default user for MVP
+    return db.list_sessions(doctor_id="mvp-user", limit=limit, offset=offset)
 
 
 @router.post("/", response_model=PatientSession, status_code=201)

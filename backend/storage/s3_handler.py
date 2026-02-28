@@ -23,6 +23,8 @@ class S3Handler:
         if settings.aws_access_key_id:
             kwargs["aws_access_key_id"] = settings.aws_access_key_id
             kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+            if settings.aws_session_token and settings.aws_access_key_id.startswith("ASIA"):
+                kwargs["aws_session_token"] = settings.aws_session_token
         self._client = boto3.client("s3", **kwargs)
         self._bucket = settings.s3_bucket_name
 

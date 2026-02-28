@@ -5,6 +5,7 @@ Validates Bearer tokens on all non-public routes.
 from __future__ import annotations
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -17,7 +18,7 @@ settings = get_settings()
 
 _bearer = HTTPBearer(auto_error=False)
 
-PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
+PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json", "/debug/dynamodb"}
 
 # MVP: allow unauthenticated access to core API (sessions, transcribe, analyze)
 PUBLIC_PATH_PREFIXES = ("/sessions", "/transcribe", "/analyze")
@@ -74,6 +75,13 @@ async def get_current_user(
     # MVP: use user from middleware for public API paths (sessions, transcribe, analyze)
     if _is_public_path(request.url.path) and hasattr(request.state, "user"):
         return request.state.user
+    
+    # MVP: allow unauthenticated access to public paths (use default mvp-user)
+    if _is_public_path(request.url.path):
+        if hasattr(request.state, "user"):
+            return request.state.user
+        return {"sub": "mvp-user"}
+    
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

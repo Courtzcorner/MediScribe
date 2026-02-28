@@ -5,9 +5,12 @@ from __future__ import annotations
 
 from celery import Celery
 from config.settings import get_settings
+from backend.utils.logger import get_logger
 
 settings = get_settings()
+logger = get_logger(__name__)
 
+# Initialize Celery - connection errors will be handled when tasks are submitted
 celery_app = Celery(
     "mediscribe",
     broker=settings.redis_url,
@@ -43,20 +46,33 @@ def submit_pipeline_job(session_id: str, audio_key: str) -> str:
     Submit an async pipeline job. Returns the Celery task ID.
     Import here to avoid circular imports at module load time.
     """
-    from backend.pipeline.tasks import transcribe_and_analyse  # noqa: PLC0415
-    task = transcribe_and_analyse.apply_async(
-        kwargs={"session_id": session_id, "audio_key": audio_key},
-        queue="pipeline",
-    )
-    return task.id
+    try:
+        from backend.pipeline.tasks import transcribe_and_analyse  # noqa: PLC0415
+        task = transcribe_and_analyse.apply_async(
+            kwargs={"session_id": session_id, "audio_key": audio_key},
+            queue="pipeline",
+        )
+        return task.id
+    except Exception as e:
+        logger.error("celery_submit_failed", error=str(e))
+        raise RuntimeError("Background job system unavailable") from e
 
 
 def get_job_status(task_id: str) -> dict:
     """Return the current status and result of a Celery task."""
-    result = celery_app.AsyncResult(task_id)
-    return {
-        "task_id": task_id,
-        "status": result.status,
-        "result": result.result if result.successful() else None,
-        "error": str(result.result) if result.failed() else None,
-    }
+    try:
+        result = celery_app.AsyncResult(task_id)
+        return {
+            "task_id": task_id,
+            "status": result.status,
+            "result": result.result if result.successful() else None,
+            "error": str(result.result) if result.failed() else None,
+        }
+    except Exception as e:
+        logger.error("celery_status_failed", error=str(e))
+        return {
+            "task_id": task_id,
+            "status": "FAILURE",
+            "result": None,
+            "error": "Background job system unavailable",
+        }

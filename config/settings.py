@@ -11,20 +11,20 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"
 
-    # AWS
+    # AWS (use AWS_SESSION_TOKEN for temporary credentials, e.g. from AWS SSO/Console)
     aws_region: str = "us-east-1"
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
+    aws_session_token: str = ""
 
     # Bedrock
     bedrock_claude_model_id: str = "us.anthropic.claude-sonnet-4-6-20250514-v1:0"
     bedrock_nova_model_id: str = "amazon.nova-sonic-v1:0"
     transcribe_language_code: str = "en-US"
 
-    # Database
-    database_url: str = "postgresql://mediscribe:password@localhost:5432/mediscribe"
-    db_pool_size: int = 10
-    db_max_overflow: int = 20
+    # Database (DynamoDB)
+    dynamodb_table_name: str = "Mediscribe"
+    dynamodb_endpoint_url: str = ""  # Empty for AWS, set for local DynamoDB
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

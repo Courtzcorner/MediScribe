@@ -26,7 +26,7 @@ export default function NewSessionPage() {
     try {
       const created = await api.post<Session>('/sessions/', {
         title: title.trim(),
-        patientId: patientId.trim() || undefined,
+        patient_id: patientId.trim() || undefined,
       })
       setSession(created)
     } catch (err) {

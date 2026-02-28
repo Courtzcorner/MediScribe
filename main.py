@@ -4,6 +4,10 @@ MediScribe — FastAPI entry point.
 Run with:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env so AWS_* vars reach boto3
+
 import uvicorn
 from api import create_app
 

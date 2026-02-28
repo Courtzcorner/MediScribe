@@ -28,16 +28,24 @@ def create_app() -> FastAPI:
     )
 
     # ── Middleware ────────────────────────────────────────────────────────────
+    # Use explicit origins when credentials=True (browsers reject * with credentials)
+    cors_origins = [
+        settings.frontend_url,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_url, "http://localhost:3000"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(RateLimiterMiddleware)
-    app.add_middleware(AuthMiddleware)
+    # Temporarily disable auth for debugging
+    # app.add_middleware(AuthMiddleware)
 
     # ── Exception handlers ───────────────────────────────────────────────────
     app.add_exception_handler(MediScribeError, mediscribe_exception_handler)
@@ -51,5 +59,27 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health_check():
         return {"status": "ok", "version": "1.0.0"}
+
+    @app.get("/debug/dynamodb")
+    async def debug_dynamodb():
+        """Debug endpoint to test DynamoDB connectivity."""
+        try:
+            from backend.storage.db_handler import DBHandler
+            db = DBHandler()
+            # Try to list sessions for a test user
+            sessions = db.list_sessions(doctor_id="test-user", limit=1)
+            return {
+                "status": "ok",
+                "table_name": settings.dynamodb_table_name,
+                "sessions_count": len(sessions),
+                "message": "DynamoDB connection successful"
+            }
+        except Exception as e:
+            import traceback
+            return {
+                "status": "error",
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
 
     return app

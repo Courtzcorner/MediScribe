@@ -50,6 +50,7 @@ Browser mic → AudioRecorder → POST /transcribe
 # Clone and enter the project
 cd MediScribe
 
+
 # Copy env and fill in your AWS credentials
 make env          # copies .env.example → .env
 # Edit .env with your AWS keys, model IDs, JWT secret
@@ -66,6 +67,13 @@ make migrate
 # Start both servers
 make dev
 ```
+
+# do:
+.venv\Scripts\activate
+cd frontend
+npm install
+cd ..
+
 
 Frontend → http://localhost:3000
 Backend API → http://localhost:8000

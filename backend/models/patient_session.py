@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 import uuid
 
 
@@ -43,8 +43,9 @@ class PatientSession(BaseModel):
 
 
 class CreateSessionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     title: str
-    patient_id: str | None = None
+    patient_id: str | None = Field(None, alias="patientId")
     notes: str | None = None
 
 
