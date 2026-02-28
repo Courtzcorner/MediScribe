@@ -102,3 +102,52 @@ async def generate_live_context(
         ddx = [str(d) for d in ddx]
 
     return LiveContextResponse(questions=questions, ddx=ddx, notes=notes)
+
+
+class AskRequest(BaseModel):
+    session_id: str
+    question: str
+    transcript_id: str | None = None
+
+
+class AskResponse(BaseModel):
+    answer: str
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask_clinical_question(
+    payload: AskRequest,
+    db: DBHandler = Depends(get_db),
+    claude: ClaudeClient = Depends(get_claude),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Answer a clinical question about this session using the transcript as context.
+    """
+    session = db.get_session(payload.session_id)
+    if session.doctor_id != current_user["sub"]:
+        raise NotFoundError("Session not found")
+
+    context = ""
+    if payload.transcript_id:
+        try:
+            transcript = db.get_transcript(payload.transcript_id)
+            if transcript.session_id == payload.session_id:
+                context = "\n".join(
+                    f"[{s.speaker.value.upper()}]: {s.text}" for s in transcript.segments
+                )
+        except Exception:
+            pass
+
+    system_prompt = (
+        "You are a helpful medical AI assistant supporting a doctor during a patient visit. "
+        "Answer clinical questions concisely and accurately. "
+        "If transcript context is provided, use it to inform your answer. "
+        "Keep responses brief and actionable. Use plain text only."
+    )
+    user_message = (
+        (f"TRANSCRIPT CONTEXT:\n{context}\n\n" if context else "")
+        + f"QUESTION: {payload.question}"
+    )
+    answer = claude.invoke(system_prompt, user_message, max_tokens=1024, temperature=0.1)
+    return AskResponse(answer=answer.strip())
