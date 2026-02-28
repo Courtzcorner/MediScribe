@@ -189,6 +189,33 @@ Copy `.env.example` to `.env` and set:
 
 ---
 
+## Troubleshooting
+
+### `pg_config executable not found` when installing psycopg2-binary
+
+`psycopg2-binary` needs PostgreSQL client libraries to build (especially on Python 3.14+ where pre-built wheels may not exist yet).
+
+**Option A — Install PostgreSQL (recommended):**
+
+```bash
+# macOS with Homebrew
+brew install postgresql@16
+export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+
+# Retry install
+pip install -r requirements.txt
+```
+
+**Option B — Use Python 3.12 or 3.13** (pre-built wheels available):
+
+```bash
+pyenv install 3.12
+pyenv local 3.12
+pip install -r requirements.txt
+```
+
+---
+
 ## License
 
 MIT
