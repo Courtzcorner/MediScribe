@@ -5,9 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from api.routes import transcribe, analyze, sessions
 from api.middleware.auth import AuthMiddleware
 from api.middleware.rate_limiter import RateLimiterMiddleware
+from api.routes import analysis, sessions, transcribe
 from backend.utils.error_handler import (
     MediScribeError,
     mediscribe_exception_handler,
@@ -46,7 +46,7 @@ def create_app() -> FastAPI:
     # ── Routers ──────────────────────────────────────────────────────────────
     app.include_router(sessions.router, prefix="/sessions", tags=["Sessions"])
     app.include_router(transcribe.router, prefix="/transcribe", tags=["Transcription"])
-    app.include_router(analyze.router, prefix="/analyze", tags=["Analysis"])
+    app.include_router(analysis.router, prefix="/analyze", tags=["Analysis"])
 
     @app.get("/health")
     async def health_check():

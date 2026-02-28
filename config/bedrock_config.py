@@ -40,6 +40,8 @@ def get_bedrock_client():
     if settings.aws_access_key_id and settings.aws_secret_access_key:
         kwargs["aws_access_key_id"] = settings.aws_access_key_id
         kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+        if settings.aws_session_token:
+            kwargs["aws_session_token"] = settings.aws_session_token
     return boto3.client(**kwargs)
 
 
@@ -52,4 +54,6 @@ def get_transcribe_client():
     if settings.aws_access_key_id and settings.aws_secret_access_key:
         kwargs["aws_access_key_id"] = settings.aws_access_key_id
         kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
+        if settings.aws_session_token:
+            kwargs["aws_session_token"] = settings.aws_session_token
     return boto3.client(**kwargs)

@@ -8,11 +8,20 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
-    Column, String, Integer, Text, DateTime, Enum as SAEnum,
-    JSON, create_engine, select, update
+    Column,
+    String,
+    Integer,
+    Text,
+    DateTime,
+    Enum as SAEnum,
+    JSON,
+    create_engine,
+    select,
+    update,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+from backend.models import Transcript, TranscriptSegment
 from backend.models.patient_session import PatientSession, SessionStatus
 from backend.models.transcript import Transcript
 from backend.models.analysis_result import AnalysisResult
@@ -136,6 +145,13 @@ class DBHandler:
             db.merge(record)
             db.commit()
 
+    def get_transcript(self, transcript_id: str) -> Transcript:
+        with self._session_factory() as db:
+            record = db.get(TranscriptRecord, transcript_id)
+            if not record:
+                raise NotFoundError(f"Transcript {transcript_id} not found")
+            return self._record_to_model(record, Transcript)
+
     # ── Analysis ──────────────────────────────────────────────────────────────
 
     def save_analysis(self, analysis: AnalysisResult) -> None:
@@ -156,6 +172,20 @@ class DBHandler:
             db.commit()
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _record_to_model(r: Base, model_type: type[BaseModel]) -> BaseModel:
+        segments = [TranscriptSegment(**s) for s in (r.segments or [])]
+        return Transcript(
+            id=r.id,
+            session_id=r.session_id,
+            segments=segments,
+            raw_text=r.raw_text,
+            language=r.language,
+            word_count=r.word_count,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
 
     @staticmethod
     def _record_to_session(r: SessionRecord) -> PatientSession:
