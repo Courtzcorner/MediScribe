@@ -1,7 +1,7 @@
 'use client'
 
 import { Activity, Sparkles, Stethoscope, FileText, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api-client'
 import type { Analysis, LiveContextData } from '@/types/analysis'
@@ -10,9 +10,10 @@ interface TabButtonProps {
   icon: React.ReactNode
   label: string
   active?: boolean
+  onClick?: () => void
 }
 
-function TabButton({ icon, label, active, onClick }: TabButtonProps & { onClick?: () => void }) {
+function TabButton({ icon, label, active, onClick }: TabButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -36,6 +37,9 @@ interface LiveContextProps {
   transcriptId?: string | null
   analysis?: Analysis | null
   children?: React.ReactNode
+  /** Raw live text for auto-question generation during recording */
+  liveText?: string
+  isRecording?: boolean
 }
 
 export function LiveContext({
@@ -43,32 +47,66 @@ export function LiveContext({
   transcriptId,
   analysis,
   children,
+  liveText,
+  isRecording = false,
 }: LiveContextProps) {
   const [activeTab, setActiveTab] = useState<LiveContextTab>('questions')
   const [liveData, setLiveData] = useState<LiveContextData | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const lastGeneratedTextRef = useRef<string>('')
+  const generateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const canGenerate = Boolean(transcriptId && transcriptId.length > 0)
+  const canGenerate = Boolean(
+    (transcriptId && transcriptId.length > 0) ||
+    (liveText && liveText.trim().split(/\s+/).length >= 20)
+  )
 
-  const handleGenerate = async () => {
-    const tid = transcriptId
-    if (!tid) return
+  const generateContext = async (text?: string) => {
+    if (isGenerating) return
     setIsGenerating(true)
     setError(null)
     try {
-      const data = await api.post<LiveContextData>('/live-context/generate', {
-        session_id: sessionId,
-        transcript_id: tid,
-      })
+      const payload: Record<string, string> = { session_id: sessionId }
+      if (text) {
+        payload.transcript_text = text
+      } else if (transcriptId) {
+        payload.transcript_id = transcriptId
+      } else {
+        return
+      }
+      const data = await api.post<LiveContextData>('/live-context/generate', payload)
       setLiveData(data)
       setActiveTab('questions')
+      if (text) lastGeneratedTextRef.current = text
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate live context')
     } finally {
       setIsGenerating(false)
     }
   }
+
+  // Auto-generate questions during live recording when enough new speech accumulates
+  useEffect(() => {
+    if (!isRecording || !liveText) return
+    const wordCount = liveText.trim().split(/\s+/).length
+    const prevWordCount = lastGeneratedTextRef.current.trim().split(/\s+/).length
+
+    // Generate once we have 20+ words, then every 25 new words
+    const shouldGenerate =
+      wordCount >= 20 && (wordCount - prevWordCount) >= 25
+
+    if (!shouldGenerate) return
+
+    if (generateTimeoutRef.current) clearTimeout(generateTimeoutRef.current)
+    generateTimeoutRef.current = setTimeout(() => {
+      generateContext(liveText)
+    }, 1500) // slight debounce
+
+    return () => {
+      if (generateTimeoutRef.current) clearTimeout(generateTimeoutRef.current)
+    }
+  }, [liveText, isRecording])
 
   // Derive content per tab: prefer liveData, fallback to analysis
   const questions = liveData?.questions ?? []
@@ -84,9 +122,15 @@ export function LiveContext({
         <div className="flex items-center gap-2 text-muted-foreground">
           <Activity className="size-5" />
           <h2 className="font-semibold uppercase text-sm tracking-wide">Live Context</h2>
+          {isRecording && isGenerating && (
+            <span className="text-xs text-purple-500 font-normal flex items-center gap-1">
+              <Loader2 className="size-3 animate-spin" />
+              updating…
+            </span>
+          )}
         </div>
         <button
-          onClick={handleGenerate}
+          onClick={() => liveText ? generateContext(liveText) : generateContext()}
           disabled={!canGenerate || isGenerating}
           className={cn(
             'flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium transition-all',
@@ -176,9 +220,11 @@ export function LiveContext({
             <Sparkles className="size-8 text-muted-foreground" />
           </div>
           <p className="text-sm max-w-md text-muted-foreground">
-            {canGenerate
+            {isRecording
+              ? 'AI questions will appear automatically as the conversation progresses. Keep talking — questions update in real-time.'
+              : canGenerate
               ? 'Click "Generate Questions" to get AI-suggested questions, differential diagnosis, and clinical notes based on the transcript.'
-              : 'Questions will appear as the conversation progresses. Complete a recording first, then generate AI-suggested questions and identify information gaps.'}
+              : 'Questions will appear as the conversation progresses. Start recording to see AI-suggested questions in real-time.'}
           </p>
         </div>
       )}

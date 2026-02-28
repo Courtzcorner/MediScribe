@@ -18,6 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from backend.models.patient_session import PatientSession, SessionStatus
 from backend.models.transcript import Transcript, TranscriptSegment
 from backend.models.analysis_result import AnalysisResult
+from backend.models.patient import Patient
 from backend.utils.logger import get_logger
 from backend.utils.error_handler import StorageError, NotFoundError
 from config.settings import get_settings
@@ -54,6 +55,24 @@ class TranscriptRecord(Base):
     segments = Column(JSON, nullable=False, default=list)
     language = Column(String, default="en-US")
     word_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PatientRecord(Base):
+    __tablename__ = "patients"
+    id = Column(String, primary_key=True)
+    mrn = Column(String, nullable=False, unique=True, index=True)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    dob = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    allergies = Column(JSON, nullable=False, default=list)
+    current_medications = Column(JSON, nullable=False, default=list)
+    conditions = Column(JSON, nullable=False, default=list)
+    doctor_id = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -226,7 +245,78 @@ class DBHandler:
                 created_at=record.created_at,
             )
 
+    # ── Patients ──────────────────────────────────────────────────────────────
+
+    def save_patient(self, patient: Patient) -> None:
+        with self._session_factory() as db:
+            record = PatientRecord(
+                id=patient.id, mrn=patient.mrn,
+                first_name=patient.first_name, last_name=patient.last_name,
+                dob=patient.dob, gender=patient.gender.value if patient.gender else None,
+                phone=patient.phone, email=patient.email,
+                allergies=patient.allergies,
+                current_medications=patient.current_medications,
+                conditions=patient.conditions,
+                doctor_id=patient.doctor_id,
+            )
+            db.merge(record)
+            db.commit()
+
+    def get_patient(self, patient_id: str) -> Patient:
+        with self._session_factory() as db:
+            record = db.get(PatientRecord, patient_id)
+            if not record:
+                raise NotFoundError(f"Patient {patient_id} not found")
+            return self._record_to_patient(record)
+
+    def list_patients(self, doctor_id: str, limit: int = 50, offset: int = 0) -> list[Patient]:
+        with self._session_factory() as db:
+            stmt = (
+                select(PatientRecord)
+                .where(PatientRecord.doctor_id == doctor_id)
+                .order_by(PatientRecord.last_name, PatientRecord.first_name)
+                .limit(limit)
+                .offset(offset)
+            )
+            return [self._record_to_patient(r) for r in db.scalars(stmt)]
+
+    def search_patients(self, doctor_id: str, query: str, limit: int = 20) -> list[Patient]:
+        from sqlalchemy import or_, func
+        with self._session_factory() as db:
+            q = query.lower()
+            stmt = (
+                select(PatientRecord)
+                .where(PatientRecord.doctor_id == doctor_id)
+                .where(
+                    or_(
+                        func.lower(PatientRecord.first_name).contains(q),
+                        func.lower(PatientRecord.last_name).contains(q),
+                        func.lower(PatientRecord.mrn).contains(q),
+                        func.lower(PatientRecord.phone).contains(q) if q else False,
+                    )
+                )
+                .order_by(PatientRecord.last_name, PatientRecord.first_name)
+                .limit(limit)
+            )
+            return [self._record_to_patient(r) for r in db.scalars(stmt)]
+
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _record_to_patient(r: PatientRecord) -> Patient:
+        from backend.models.patient import Gender
+        return Patient(
+            id=r.id, mrn=r.mrn,
+            first_name=r.first_name, last_name=r.last_name,
+            dob=r.dob,
+            gender=Gender(r.gender) if r.gender else None,
+            phone=r.phone, email=r.email,
+            allergies=r.allergies or [],
+            current_medications=r.current_medications or [],
+            conditions=r.conditions or [],
+            doctor_id=r.doctor_id,
+            created_at=r.created_at, updated_at=r.updated_at,
+        )
 
     @staticmethod
     def _record_to_session(r: SessionRecord) -> PatientSession:

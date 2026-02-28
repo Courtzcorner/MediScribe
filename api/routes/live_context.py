@@ -19,7 +19,8 @@ router = APIRouter()
 
 class LiveContextRequest(BaseModel):
     session_id: str
-    transcript_id: str
+    transcript_id: str | None = None
+    transcript_text: str | None = None   # raw text for live in-session generation
 
 
 class LiveContextResponse(BaseModel):
@@ -50,9 +51,18 @@ async def generate_live_context(
     if session.doctor_id != current_user["sub"]:
         raise NotFoundError("Session not found")
 
-    transcript = db.get_transcript(payload.transcript_id)
-    if transcript.session_id != payload.session_id:
-        raise NotFoundError("Transcript does not belong to this session")
+    if payload.transcript_text:
+        conversation_text = payload.transcript_text
+    elif payload.transcript_id:
+        transcript = db.get_transcript(payload.transcript_id)
+        if transcript.session_id != payload.session_id:
+            raise NotFoundError("Transcript does not belong to this session")
+        conversation_text = "\n".join(
+            f"[{s.speaker.value.upper()}]: {s.text}" for s in transcript.segments
+        )
+    else:
+        from backend.utils.error_handler import AnalysisError
+        raise AnalysisError("Either transcript_id or transcript_text must be provided")
 
     prompt_path = Path(__file__).resolve().parent.parent.parent / "backend/analysis/prompts/live_context.txt"
     system_prompt = prompt_path.read_text() if prompt_path.exists() else (
@@ -60,7 +70,7 @@ async def generate_live_context(
     )
     user_message = (
         "TRANSCRIPT SO FAR:\n\n"
-        + "\n".join(f"[{s.speaker.value.upper()}]: {s.text}" for s in transcript.segments)
+        + conversation_text
         + "\n\nProduce the JSON response."
     )
     raw = claude.invoke(system_prompt, user_message, max_tokens=2048, temperature=0.2)
