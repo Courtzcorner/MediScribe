@@ -26,7 +26,10 @@ PUBLIC_PATH_PREFIXES = ("/sessions", "/transcribe", "/analyze")
 def _is_public_path(path: str) -> bool:
     if path in PUBLIC_PATHS:
         return True
-    return any(path == prefix or path.startswith(prefix + "/") for prefix in PUBLIC_PATH_PREFIXES)
+    
+    # Check prefixes - handle both /sessions and /sessions/
+    normalized_path = path.rstrip("/")
+    return any(normalized_path == prefix or normalized_path.startswith(prefix + "/") for prefix in PUBLIC_PATH_PREFIXES)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

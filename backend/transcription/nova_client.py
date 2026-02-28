@@ -1,19 +1,21 @@
 """
-Amazon Transcribe client for speech-to-text.
+Deepgram Nova-2 client for medical transcription.
 
-Uses Amazon Transcribe for batch STT with speaker diarization (Doctor/Patient).
-Nova Sonic 2 (amazon.nova-2-sonic-v1:0) requires HTTP/2 bidirectional streaming
-which is not yet supported by the boto3 SDK — Transcribe is used instead.
+Handles both:
+1. Real-time streaming (via AsyncDeepgramClient and WebSocket)
+2. Batch/Pre-recorded transcription (via synchronous DeepgramClient)
+
+The real-time path is used by api/routes/realtime.py.
+The batch path is used by backend/pipeline/orchestrator.py.
 """
 from __future__ import annotations
 
+import asyncio
 import json
-import time
-import urllib.request
-import uuid
+from typing import Any
 
-import boto3
-from botocore.exceptions import ClientError
+from deepgram import AsyncDeepgramClient, DeepgramClient
+from deepgram.listen.v1.types.listen_v1results import ListenV1Results
 
 from backend.models.transcript import Transcript, TranscriptSegment, SpeakerRole
 from backend.utils.logger import get_logger
@@ -24,132 +26,212 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
-class NovaTranscribeClient:
+class DeepgramNovaClient:
     """
-    Wraps Amazon Transcribe for medical-grade batch STT.
-    Supports speaker diarization (doctor vs patient).
+    Manages Deepgram Nova-2 transcription sessions.
     """
 
     def __init__(self) -> None:
-        kwargs: dict = {"region_name": settings.aws_region}
-        if settings.aws_access_key_id:
-            kwargs["aws_access_key_id"] = settings.aws_access_key_id
-            kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
-        self._client = boto3.client("transcribe", **kwargs)
+        api_key = settings.deepgram_api_key
+        if not api_key:
+            raise TranscriptionError(
+                "DEEPGRAM_API_KEY is not set. "
+                "Add it to your .env file to enable transcription."
+            )
+        self._api_key = api_key
+
+    # ── Batch Transcription (Synchronous fallback for Orchestrator) ──────────
 
     def transcribe(self, audio_bytes: bytes, session_id: str, audio_s3_uri: str | None = None) -> Transcript:
         """
-        Transcribe audio using Amazon Transcribe.
-        audio_s3_uri must point to the already-uploaded S3 WAV file.
+        Transcribe audio using Deepgram Pre-recorded API.
+        Maps Deepgram's native utterances to the MediScribe Transcript model.
         """
-        if not audio_s3_uri:
-            raise TranscriptionError("audio_s3_uri is required for Transcribe")
+        client = DeepgramClient(self._api_key)
 
-        logger.info(
-            "transcription_start",
-            session_id=session_id,
-            uri=audio_s3_uri,
-        )
-        job_name = self._start_job(audio_s3_uri, session_id)
-        raw = self._wait(job_name)
-        transcript = self._parse(raw, session_id)
-        logger.info("transcription_complete", session_id=session_id, segments=len(transcript.segments))
-        return transcript
-
-    # ── Private ───────────────────────────────────────────────────────────────
-
-    def _start_job(self, s3_uri: str, session_id: str) -> str:
-        job_name = f"mediscribe-{session_id}-{uuid.uuid4().hex[:8]}"
         try:
-            self._client.start_transcription_job(
-                TranscriptionJobName=job_name,
-                Media={"MediaFileUri": s3_uri},
-                MediaFormat="wav",
-                LanguageCode=settings.transcribe_language_code,
-                Settings={
-                    "ShowSpeakerLabels": True,
-                    "MaxSpeakerLabels": 2,
-                    "ShowAlternatives": False,
-                },
-            )
-        except ClientError as e:
-            raise TranscriptionError(f"Failed to start Transcribe job: {e}") from e
-        logger.info("transcribe_job_started", job_name=job_name)
-        return job_name
-
-    def _wait(self, job_name: str, poll: int = 5, timeout: int = 600) -> dict:
-        elapsed = 0
-        while elapsed < timeout:
-            resp = self._client.get_transcription_job(TranscriptionJobName=job_name)
-            job = resp["TranscriptionJob"]
-            status = job["TranscriptionJobStatus"]
-            if status == "COMPLETED":
-                uri = job["Transcript"].get(
-                    "RedactedTranscriptFileUri",
-                    job["Transcript"]["TranscriptFileUri"],
+            if audio_bytes:
+                response = client.listen.v1.media.transcribe_file(
+                    request=audio_bytes,
+                    model="nova-2-medical",
+                    smart_format=True,
+                    diarize=True,
+                    utterances=True,
+                    punctuate=True,
+                    language="en-US",
                 )
-                with urllib.request.urlopen(uri) as r:
-                    return json.loads(r.read())
-            if status == "FAILED":
-                raise TranscriptionError(f"Transcribe job failed: {job.get('FailureReason')}")
-            time.sleep(poll)
-            elapsed += poll
-        raise TranscriptionError(f"Transcribe job timed out after {timeout}s")
+            elif audio_s3_uri:
+                response = client.listen.v1.media.transcribe_url(
+                    url={"url": audio_s3_uri},
+                    model="nova-2-medical",
+                    smart_format=True,
+                    diarize=True,
+                    utterances=True,
+                    punctuate=True,
+                    language="en-US",
+                )
+            else:
+                raise TranscriptionError("Either audio_bytes or audio_s3_uri is required")
 
-    def _parse(self, result: dict, session_id: str) -> Transcript:
-        items = result.get("results", {}).get("items", [])
-        spk_segs = result.get("results", {}).get("speaker_labels", {}).get("segments", [])
+            if not response.results:
+                raise TranscriptionError("Deepgram returned no results")
 
-        speaker_map: dict[tuple[float, float], str] = {}
-        for seg in spk_segs:
-            for item in seg.get("items", []):
-                key = (float(item.get("start_time", 0)), float(item.get("end_time", 0)))
-                speaker_map[key] = seg.get("speaker_label", "spk_0")
-
-        segments: list[TranscriptSegment] = []
-        cur_spk: str | None = None
-        cur_words: list[str] = []
-        cur_start = cur_end = 0.0
-
-        for item in items:
-            if item["type"] == "punctuation":
-                if cur_words:
-                    cur_words[-1] += item["alternatives"][0]["content"]
-                continue
-            start = float(item.get("start_time", cur_end))
-            end = float(item.get("end_time", start))
-            word = item["alternatives"][0]["content"]
-            spk = speaker_map.get((start, end), cur_spk or "spk_0")
-
-            if spk != cur_spk and cur_words:
+            # Deepgram SDK v6 returns typed objects. Extract utterances.
+            segments = []
+            if hasattr(response.results, "utterances") and response.results.utterances:
+                for utt in response.results.utterances:
+                    segments.append(TranscriptSegment(
+                        speaker=SpeakerRole.DOCTOR if utt.speaker == 0 else SpeakerRole.PATIENT,
+                        text=utt.transcript,
+                        start_time=float(utt.start),
+                        end_time=float(utt.end),
+                        confidence=float(utt.confidence),
+                    ))
+            else:
+                # Fallback to single channel transcript if utterances aren't available
+                channel = response.results.channels[0]
+                alt = channel.alternatives[0]
                 segments.append(TranscriptSegment(
-                    speaker=_map_speaker(cur_spk or "spk_0"),
-                    text=" ".join(cur_words),
-                    start_time=cur_start,
-                    end_time=cur_end,
-                    confidence=float(item["alternatives"][0].get("confidence", 1.0)),
+                    speaker=SpeakerRole.UNKNOWN,
+                    text=alt.transcript,
+                    start_time=0.0,
+                    end_time=0.0,
+                    confidence=float(alt.confidence),
                 ))
-                cur_words = []
-                cur_start = start
 
-            cur_spk = spk
-            cur_words.append(word)
-            cur_end = end
+            logger.info("deepgram_batch_complete", session_id=session_id, segments=len(segments))
+            return Transcript.from_segments(session_id, segments)
 
-        if cur_words:
-            segments.append(TranscriptSegment(
-                speaker=_map_speaker(cur_spk or "spk_0"),
-                text=" ".join(cur_words),
-                start_time=cur_start,
-                end_time=cur_end,
-            ))
+        except Exception as e:
+            logger.error("deepgram_batch_error", session_id=session_id, error=str(e))
+            raise TranscriptionError(f"Deepgram transcription failed: {e}") from e
 
-        return Transcript.from_segments(session_id, segments)
+    # ── Real-time Streaming ──────────────────────────────────────────────────
 
+    class Session:
+        """Active streaming session wrapping an AsyncV1SocketClient."""
 
-def _map_speaker(label: str) -> SpeakerRole:
-    if label == "spk_0":
-        return SpeakerRole.DOCTOR
-    if label == "spk_1":
-        return SpeakerRole.PATIENT
-    return SpeakerRole.UNKNOWN
+        def __init__(self, session_id: str) -> None:
+            self.session_id = session_id
+            self.events: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+            self._ws = None
+            self._recv_task: asyncio.Task | None = None
+
+        async def send_audio(self, chunk: bytes) -> None:
+            """Send a raw audio chunk to the Deepgram stream."""
+            if self._ws is None:
+                raise TranscriptionError("Deepgram session is not open")
+            self._ws.send_media(chunk)
+
+        async def close(self) -> None:
+            """Signal end-of-stream and clean up."""
+            if self._ws is not None:
+                self._ws.send_close_stream()
+            if self._recv_task is not None:
+                self._recv_task.cancel()
+                try:
+                    await self._recv_task
+                except asyncio.CancelledError:
+                    pass
+            await self.events.put({"type": "close", "text": ""})
+            logger.info("deepgram_session_closed", session_id=self.session_id)
+
+        async def _receive_loop(self) -> None:
+            """Background task: read transcript events from Deepgram."""
+            try:
+                while True:
+                    msg = await self._ws.recv()
+
+                    if not isinstance(msg, ListenV1Results):
+                        continue
+
+                    alts = msg.channel.alternatives
+                    if not alts:
+                        continue
+
+                    transcript_text = alts[0].transcript
+                    if not transcript_text:
+                        continue
+
+                    is_final = bool(msg.is_final)
+                    confidence = float(alts[0].confidence) if hasattr(alts[0], "confidence") else 0.0
+
+                    event = {
+                        "type": "final" if is_final else "interim",
+                        "text": transcript_text,
+                        "confidence": round(confidence, 4),
+                        "speech_final": bool(msg.speech_final) if msg.speech_final else False,
+                    }
+                    await self.events.put(event)
+
+                    logger.debug(
+                        "deepgram_transcript",
+                        session_id=self.session_id,
+                        is_final=is_final,
+                        text=transcript_text[:80],
+                    )
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error(
+                    "deepgram_recv_error",
+                    session_id=self.session_id,
+                    error=str(exc),
+                )
+                await self.events.put({"type": "error", "text": str(exc)})
+
+    class _SessionContext:
+        """Async context manager that owns the Deepgram WebSocket lifecycle."""
+
+        def __init__(self, api_key: str, session_id: str) -> None:
+            self._api_key = api_key
+            self._session_id = session_id
+            self._dg_ctx = None
+            self.session: DeepgramNovaClient.Session | None = None
+
+        async def __aenter__(self) -> "DeepgramNovaClient.Session":
+            dg = AsyncDeepgramClient(api_key=self._api_key)
+
+            self._dg_ctx = dg.listen.v1.connect(
+                model="nova-2-general",
+                language="en-US",
+                smart_format="true",
+                interim_results="true",
+                endpointing="300",
+                encoding="linear16",
+                sample_rate="16000",
+                channels="1",
+            )
+
+            ws = await self._dg_ctx.__aenter__()
+
+            session = DeepgramNovaClient.Session(self._session_id)
+            session._ws = ws
+            session._recv_task = asyncio.create_task(session._receive_loop())
+            self.session = session
+
+            logger.info(
+                "deepgram_connected",
+                session_id=self._session_id,
+                model="nova-2-general",
+            )
+
+            return session
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+            if self.session is not None:
+                await self.session.close()
+            if self._dg_ctx is not None:
+                await self._dg_ctx.__aexit__(exc_type, exc_val, exc_tb)
+
+    def connect(self, session_id: str) -> "_SessionContext":
+        """
+        Return an async context manager that opens a Deepgram stream.
+
+        Usage:
+            async with client.connect("abc") as session:
+                await session.send_audio(chunk)
+                event = await session.events.get()
+        """
+        return self._SessionContext(self._api_key, session_id)

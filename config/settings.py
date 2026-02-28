@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     bedrock_nova_model_id: str = "amazon.nova-sonic-v1:0"
     transcribe_language_code: str = "en-US"
 
+    # Deepgram
+    deepgram_api_key: str = ""
+
     # Database
     database_url: str = "postgresql://mediscribe:password@localhost:5432/mediscribe"
     db_pool_size: int = 10

@@ -9,7 +9,7 @@ from collections.abc import Generator
 from backend.models.patient_session import PatientSession
 from backend.models.transcript import Transcript
 from backend.models.analysis_result import AnalysisResult
-from backend.transcription.nova_client import NovaTranscribeClient
+from backend.transcription.nova_client import DeepgramNovaClient
 from backend.transcription.audio_preprocessor import AudioPreprocessor
 from backend.transcription.transcript_formatter import TranscriptFormatter
 from backend.analysis.claude_client import ClaudeClient
@@ -28,7 +28,7 @@ class MedicalPipelineOrchestrator:
     """End-to-end pipeline: audio → transcript → analysis."""
 
     def __init__(self) -> None:
-        self.transcriber = NovaTranscribeClient()
+        self.transcriber = DeepgramNovaClient()
         self.preprocessor = AudioPreprocessor()
         self.formatter = TranscriptFormatter()
         self.claude = ClaudeClient()
