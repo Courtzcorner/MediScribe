@@ -14,6 +14,9 @@ import AnalysisPanel from '@/components/analysis/AnalysisPanel'
 import MedicationList from '@/components/analysis/MedicationList'
 import DiagnosisSummary from '@/components/analysis/DiagnosisSummary'
 import SOAPNote from '@/components/analysis/SOAPNote'
+import AudioRecorder from '@/components/recorder/AudioRecorder'
+import Sidebar from '@/components/layout/Sidebar'
+import Header from '@/components/layout/Header'
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -60,6 +63,23 @@ export default function SessionDetailPage() {
         <Link href="/sessions" className="text-primary hover:underline text-sm">
           Back to sessions
         </Link>
+      </div>
+    )
+  }
+
+  // New session — show recorder, then reload data once done
+  if (session.status === 'idle') {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <Header title={session.title} />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-2xl mx-auto">
+              <AudioRecorder session={session} onComplete={() => load()} />
+            </div>
+          </main>
+        </div>
       </div>
     )
   }

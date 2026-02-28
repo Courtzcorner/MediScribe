@@ -65,16 +65,17 @@ class MedicalPipelineOrchestrator:
             session.audio_url = audio_uri
             logger.info("audio_uploaded", session_id=session.id, key=audio_key)
 
-            # 3. Transcribe
-            job_name = self.transcriber.start_transcription_job(audio_uri, session.id)
-            raw_result = self.transcriber.wait_for_job(job_name)
-            transcript = self.transcriber.parse_result(raw_result, session.id)
-
-            # 4. Format
+            # 3. Transcribe via Amazon Transcribe (speaker-diarized)
+            transcript = self.transcriber.transcribe(wav_bytes, session.id, audio_s3_uri=audio_uri)
             transcript = self.formatter.format(transcript)
             logger.info("transcription_complete", session_id=session.id, words=transcript.word_count)
 
-            # 5. Analyse
+            # 4. Persist transcript JSON to S3
+            transcript_key = f"transcripts/{session.id}.json"
+            self.s3.upload_json(transcript.model_dump(mode="json"), transcript_key)
+            logger.info("transcript_json_uploaded", session_id=session.id, key=transcript_key)
+
+            # 5. Analyse with Claude (fed the transcript from S3-persisted data)
             analysis = self._run_analysis(session, transcript)
             logger.info("analysis_complete", session_id=session.id, analysis_id=analysis.id)
 
