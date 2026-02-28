@@ -58,8 +58,7 @@ export function VisitTabs({ activeTab, onTabChange, postVisitEnabled = false }: 
         icon={<CheckCircle className="size-4" />}
         label="Post-Visit"
         active={activeTab === 'postvisit'}
-        disabled={!postVisitEnabled}
-        onClick={postVisitEnabled ? () => onTabChange('postvisit') : undefined}
+        onClick={() => onTabChange('postvisit')}
       />
     </div>
   )
