@@ -73,11 +73,15 @@ class AnalysisRecord(Base):
 
 
 def create_db_engine():
+    connect_args = {}
+    if settings.db_ssl_mode:
+        connect_args["sslmode"] = settings.db_ssl_mode
     return create_engine(
         settings.database_url,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
         pool_pre_ping=True,
+        connect_args=connect_args,
     )
 
 

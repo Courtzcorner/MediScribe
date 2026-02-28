@@ -17,7 +17,7 @@ def get_db() -> DBHandler:
     return DBHandler()
 
 
-@router.get("/", response_model=list[PatientSession])
+@router.get("", response_model=list[PatientSession])
 async def list_sessions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -28,7 +28,7 @@ async def list_sessions(
     return db.list_sessions(doctor_id=current_user["sub"], limit=limit, offset=offset)
 
 
-@router.post("/", response_model=PatientSession, status_code=201)
+@router.post("", response_model=PatientSession, status_code=201)
 async def create_session(
     payload: CreateSessionRequest,
     db: DBHandler = Depends(get_db),

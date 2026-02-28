@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs" if settings.is_development else None,
         redoc_url="/redoc" if settings.is_development else None,
+        redirect_slashes=False,
     )
 
     # ── Middleware ────────────────────────────────────────────────────────────

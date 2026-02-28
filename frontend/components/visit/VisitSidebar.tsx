@@ -11,18 +11,30 @@ import {
   CreditCard,
   LogOut,
 } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
+
+export type SidebarSection =
+  | 'transcript'
+  | 'clinical-focus'
+  | 'clinical-fields'
+  | 'draft-note'
+  | 'referrals'
+  | 'visit-summary'
+  | 'ask'
 
 interface NavItemProps {
   icon: React.ReactNode
   label: string
+  id: SidebarSection
   active?: boolean
-  badge?: string
+  onSelect: (id: SidebarSection) => void
 }
 
-function NavItem({ icon, label, active }: NavItemProps) {
+function NavItem({ icon, label, id, active, onSelect }: NavItemProps) {
   return (
     <button
+      onClick={() => onSelect(id)}
       className={cn(
         'w-full flex items-center gap-3 px-4 py-3 text-left transition-all relative',
         active
@@ -38,30 +50,32 @@ function NavItem({ icon, label, active }: NavItemProps) {
 
 interface VisitSidebarProps {
   sessionId?: string
+  activeSection: SidebarSection
+  onSectionChange: (section: SidebarSection) => void
 }
 
-export function VisitSidebar({ sessionId }: VisitSidebarProps) {
+export function VisitSidebar({ activeSection, onSectionChange }: VisitSidebarProps) {
   return (
     <aside className="w-60 border-r border-border bg-card flex flex-col h-full flex-shrink-0">
       <nav className="flex-1 py-4">
-        <NavItem icon={<FileText />} label="Transcript" active />
-        <NavItem icon={<Focus />} label="Clinical Focus" />
-        <NavItem icon={<ClipboardList />} label="Clinical Fields" />
-        <NavItem icon={<FileEdit />} label="Draft Note" />
-        <NavItem icon={<Users />} label="Referrals" />
-        <NavItem icon={<FileCheck />} label="Visit Summary" />
-        <NavItem icon={<MessageSquare />} label="Ask" />
+        <NavItem icon={<FileText />} label="Transcript" id="transcript" active={activeSection === 'transcript'} onSelect={onSectionChange} />
+        <NavItem icon={<Focus />} label="Clinical Focus" id="clinical-focus" active={activeSection === 'clinical-focus'} onSelect={onSectionChange} />
+        <NavItem icon={<ClipboardList />} label="Clinical Fields" id="clinical-fields" active={activeSection === 'clinical-fields'} onSelect={onSectionChange} />
+        <NavItem icon={<FileEdit />} label="Draft Note" id="draft-note" active={activeSection === 'draft-note'} onSelect={onSectionChange} />
+        <NavItem icon={<Users />} label="Referrals" id="referrals" active={activeSection === 'referrals'} onSelect={onSectionChange} />
+        <NavItem icon={<FileCheck />} label="Visit Summary" id="visit-summary" active={activeSection === 'visit-summary'} onSelect={onSectionChange} />
+        <NavItem icon={<MessageSquare />} label="Ask" id="ask" active={activeSection === 'ask'} onSelect={onSectionChange} />
       </nav>
 
       <div className="border-t border-border py-4">
-        <NavItem icon={<CreditCard />} label="Checkout" />
-        <a
+        <NavItem icon={<CreditCard />} label="Checkout" id="transcript" active={false} onSelect={onSectionChange} />
+        <Link
           href="/sessions"
           className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         >
           <LogOut className="size-5 flex-shrink-0" />
           <span className="text-sm font-medium">Exit Encounter</span>
-        </a>
+        </Link>
       </div>
     </aside>
   )

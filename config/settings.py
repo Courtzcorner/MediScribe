@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://mediscribe:password@localhost:5432/mediscribe"
     db_pool_size: int = 10
     db_max_overflow: int = 20
+    db_ssl_mode: str = ""  # Set to "require" when using Amazon RDS
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

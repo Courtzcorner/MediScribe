@@ -88,12 +88,15 @@ export function VisitHeader({ title = 'Laasya', subtitle = 'New symptom evaluati
             {isVoiceActive ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             Voice
           </button>
-          <button className="bg-rose-400 hover:bg-rose-500 text-white px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all">
+          <Link
+            href="/sessions"
+            className="bg-rose-400 hover:bg-rose-500 text-white px-6 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all"
+          >
             <div className="size-5 rounded-full bg-white/30 flex items-center justify-center">
               <div className="size-2 rounded-full bg-white" />
             </div>
             End Encounter
-          </button>
+          </Link>
         </div>
       </div>
     </header>

@@ -70,12 +70,7 @@ class MedicalPipelineOrchestrator:
             transcript = self.formatter.format(transcript)
             logger.info("transcription_complete", session_id=session.id, words=transcript.word_count)
 
-            # 4. Persist transcript JSON to S3
-            transcript_key = f"transcripts/{session.id}.json"
-            self.s3.upload_json(transcript.model_dump(mode="json"), transcript_key)
-            logger.info("transcript_json_uploaded", session_id=session.id, key=transcript_key)
-
-            # 5. Analyse with Claude (fed the transcript from S3-persisted data)
+            # 4. Analyse with Claude
             analysis = self._run_analysis(session, transcript)
             logger.info("analysis_complete", session_id=session.id, analysis_id=analysis.id)
 

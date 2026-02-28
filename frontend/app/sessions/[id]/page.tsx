@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { RefreshCw } from 'lucide-react'
@@ -25,7 +25,8 @@ export default function SessionDetailPage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true)
     try {
       const s = await api.get<Session>(`/sessions/${id}`)
       setSession(s)
@@ -42,11 +43,11 @@ export default function SessionDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
 
   useEffect(() => {
     load()
-  }, [id])
+  }, [load])
 
   if (loading) {
     return (
@@ -67,7 +68,7 @@ export default function SessionDetailPage() {
     )
   }
 
-  // New session — show recorder, then reload data once done
+  // New session — show recorder; reload once done so we transition to the full layout
   if (session.status === 'idle') {
     return (
       <div className="flex h-screen bg-gray-50">
@@ -84,10 +85,10 @@ export default function SessionDetailPage() {
     )
   }
 
-  const hasTreatmentContent =
+  const hasTreatment =
     analysis &&
     (analysis.medications.length > 0 ||
-      analysis.patientInstructions ||
+      !!analysis.patientInstructions ||
       analysis.keyPoints.length > 0)
 
   return (
@@ -96,11 +97,8 @@ export default function SessionDetailPage() {
       title={session.title}
       subtitle="Clinical documentation"
       transcriptEntryCount={transcript?.segments?.length ?? 0}
-      transcriptContent={
-        <div className="h-full overflow-y-auto p-4">
-          <TranscriptViewer transcript={transcript} isLoading={false} />
-        </div>
-      }
+
+      // Default view (Transcript sidebar tab) — full analysis panel
       liveContextContent={
         <AnalysisPanel
           analysis={analysis}
@@ -110,29 +108,92 @@ export default function SessionDetailPage() {
           transcriptId={session.transcriptId}
         />
       }
-      treatmentContent={
-        hasTreatmentContent ? (
-          <div className="space-y-4">
-            {analysis?.medications && analysis.medications.length > 0 && (
-              <MedicationList medications={analysis.medications} />
+
+      // Draft Note tab — SOAP note only
+      soapContent={
+        analysis?.soapNote ? (
+          <SOAPNote soapNote={analysis.soapNote} />
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-12">
+            No SOAP note yet — complete a recording first.
+          </p>
+        )
+      }
+
+      // Clinical Fields tab — diagnoses
+      diagnosisContent={
+        analysis?.diagnoses?.length ? (
+          <DiagnosisSummary diagnoses={analysis.diagnoses} />
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-12">
+            No diagnoses yet — complete a recording first.
+          </p>
+        )
+      }
+
+      // Referrals tab
+      referralsContent={
+        analysis?.followUp?.referrals?.length ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+            <h3 className="font-semibold text-gray-900">Referrals</h3>
+            <ul className="space-y-2">
+              {analysis.followUp.referrals.map((r, i) => (
+                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-12">No referrals documented.</p>
+        )
+      }
+
+      // Visit Summary tab
+      summaryContent={
+        analysis?.summary ? (
+          <div className="bg-blue-50 rounded-2xl border border-blue-100 p-5">
+            <h3 className="font-semibold text-blue-800 mb-2">Visit Summary</h3>
+            <p className="text-sm text-blue-700 leading-relaxed">{analysis.summary}</p>
+            {analysis.followUp && (
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Follow-up</p>
+                <p className="text-sm text-blue-700">{analysis.followUp.timeframe} — {analysis.followUp.instructions}</p>
+              </div>
             )}
-            {analysis?.patientInstructions && (
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-12">
+            No summary yet — complete a recording first.
+          </p>
+        )
+      }
+
+      // Treatment Plan section
+      treatmentContent={
+        hasTreatment ? (
+          <div className="space-y-4">
+            {analysis!.medications.length > 0 && (
+              <MedicationList medications={analysis!.medications} />
+            )}
+            {analysis!.patientInstructions && (
               <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/20">
                 <h4 className="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
                   Patient Instructions
                 </h4>
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  {analysis.patientInstructions}
+                  {analysis!.patientInstructions}
                 </p>
               </div>
             )}
-            {analysis?.keyPoints && analysis.keyPoints.length > 0 && (
+            {analysis!.keyPoints.length > 0 && (
               <div className="bg-amber-500/10 rounded-xl p-4 border border-amber-500/20">
                 <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">
                   Key Points
                 </h4>
                 <ul className="space-y-1.5">
-                  {analysis.keyPoints.map((point, i) => (
+                  {analysis!.keyPoints.map((point, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
                       {point}
@@ -143,6 +204,13 @@ export default function SessionDetailPage() {
             )}
           </div>
         ) : undefined
+      }
+
+      // Right panel — transcript
+      transcriptContent={
+        <div className="h-full overflow-y-auto p-4">
+          <TranscriptViewer transcript={transcript} isLoading={false} />
+        </div>
       }
     />
   )
