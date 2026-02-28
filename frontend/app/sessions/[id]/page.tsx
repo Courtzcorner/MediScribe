@@ -27,6 +27,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [processingError, setProcessingError] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [notes, setNotes] = useState('')
 
   // Tab state — default to previsit
   const [activeTab, setActiveTab] = useState<VisitTab>('previsit')
@@ -60,6 +61,7 @@ export default function SessionDetailPage() {
         const p = await api.get<Patient>(`/patients/${s.patientId}`).catch(() => null)
         setPatient(p)
       }
+      setNotes(s.notes || '')
       if (s.status === 'completed') {
         setActiveTab('postvisit')
       }
@@ -114,6 +116,28 @@ export default function SessionDetailPage() {
     setIsProcessing(true)
     pendingProcessRef.current = true
   }, [recorder, liveSpeech])
+
+  const handleSaveNotes = useCallback(async (newNotes: string) => {
+    try {
+      await api.patch(`/sessions/${id}`, { notes: newNotes })
+      setNotes(newNotes)
+      // Also update session object to keep them in sync
+      setSession(prev => prev ? { ...prev, notes: newNotes } : null)
+    } catch (err) {
+      console.error('Failed to save notes:', err)
+      throw err
+    }
+  }, [id])
+
+  const handleCompleteVisit = useCallback(async () => {
+    try {
+      await api.patch(`/sessions/${id}`, { status: 'completed' })
+      setSession(prev => prev ? { ...prev, status: 'completed' } : null)
+      // Success feedback could be added here
+    } catch (err) {
+      console.error('Failed to complete visit:', err)
+    }
+  }, [id])
 
   if (loading) {
     return (
@@ -181,6 +205,9 @@ export default function SessionDetailPage() {
         recordingDuration={recorder.formattedDuration}
         onStartEncounter={handleStartEncounter}
         onEndEncounter={handleEndEncounter}
+        notes={notes}
+        onSaveNotes={handleSaveNotes}
+        onCompleteVisit={handleCompleteVisit}
 
         liveEntries={liveSpeech.entries}
         liveText={liveSpeech.fullText}
