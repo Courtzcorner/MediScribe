@@ -79,3 +79,18 @@ async def stream_analysis(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/{session_id}", response_model=AnalysisResult)
+async def get_analysis(
+    session_id: str,
+    db: DBHandler = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Retrieve the latest analysis for a completed session."""
+    session = db.get_session(session_id)
+    if session.doctor_id != current_user["sub"]:
+        raise NotFoundError("Session not found")
+    if not session.analysis_id:
+        raise NotFoundError("Analysis not yet available for this session")
+    return db.get_analysis_by_session(session_id)

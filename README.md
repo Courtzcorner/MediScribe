@@ -191,6 +191,36 @@ Copy `.env.example` to `.env` and set:
 
 ## Troubleshooting
 
+### Bedrock `ValidationException`: model identifier is invalid
+
+This means `BEDROCK_CLAUDE_MODEL_ID` is not valid for your account/region.
+
+- Set `BEDROCK_CLAUDE_MODEL_ID` to a model (or inference profile ID) available in your configured `AWS_REGION`.
+- Optionally set `BEDROCK_CLAUDE_FALLBACK_MODEL_IDS` as a comma-separated list.
+- If Bedrock says on-demand throughput is not supported, set `BEDROCK_CLAUDE_INFERENCE_PROFILE_ID` to the inference profile ID/ARN and restart the backend.
+- MediScribe now automatically retries fallback IDs when Bedrock rejects the primary model ID.
+
+### `NoSuchBucket` while analyzing/transcribing
+
+If you see `Failed to upload audio to S3` with `NoSuchBucket`, the bucket in `S3_BUCKET_NAME` does not exist in `S3_REGION`.
+
+- In `development`, MediScribe now attempts to create the bucket automatically.
+- In non-development environments, create the bucket first and ensure IAM credentials have `s3:HeadBucket`, `s3:CreateBucket` (if needed), and `s3:PutObject` permissions.
+
+### SQLAlchemy `e3q8` / `POST /sessions` returns 500
+
+This usually means the backend cannot connect to PostgreSQL at `DATABASE_URL`.
+
+```bash
+# Start local infra first
+make docker-up
+
+# Verify Postgres is listening on 5432
+nc -z localhost 5432 && echo "postgres up"
+```
+
+In `development`, the backend now falls back to `sqlite:///./mediscribe_dev.db` if local Postgres is unavailable, so basic session flows can still work while infra is down.
+
 ### `pg_config executable not found` when installing psycopg2-binary
 
 `psycopg2-binary` needs PostgreSQL client libraries to build (especially on Python 3.14+ where pre-built wheels may not exist yet).

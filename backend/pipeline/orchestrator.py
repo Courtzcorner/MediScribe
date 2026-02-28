@@ -18,7 +18,6 @@ from backend.storage.s3_handler import S3Handler
 from backend.utils.logger import get_logger
 from backend.utils.error_handler import TranscriptionError, AnalysisError
 from config.settings import get_settings
-from config.bedrock_config import CLAUDE_MODEL_ID
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -105,7 +104,12 @@ class MedicalPipelineOrchestrator:
             full_response += chunk
             yield chunk
 
-        analysis = self.parser.parse(full_response, session.id, transcript.id, CLAUDE_MODEL_ID)
+        analysis = self.parser.parse(
+            full_response,
+            session.id,
+            transcript.id,
+            self.claude.active_model_id,
+        )
         return analysis
 
     # ── Private ───────────────────────────────────────────────────────────────
@@ -114,7 +118,12 @@ class MedicalPipelineOrchestrator:
         system_prompt = self._load_system_prompt()
         user_message = self._build_analysis_prompt(transcript)
         raw = self.claude.invoke(system_prompt, user_message)
-        return self.parser.parse(raw, session.id, transcript.id, CLAUDE_MODEL_ID)
+        return self.parser.parse(
+            raw,
+            session.id,
+            transcript.id,
+            self.claude.active_model_id,
+        )
 
     @staticmethod
     def _load_system_prompt() -> str:

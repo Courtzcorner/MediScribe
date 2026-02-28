@@ -19,8 +19,8 @@ _bearer = HTTPBearer(auto_error=False)
 
 PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
 
-# MVP: allow unauthenticated access to core API (sessions, transcribe, analyze)
-PUBLIC_PATH_PREFIXES = ("/sessions", "/transcribe", "/analyze")
+# MVP: allow unauthenticated access to core API (sessions, transcribe, analyze, live-context, auth)
+PUBLIC_PATH_PREFIXES = ("/sessions", "/transcribe", "/analyze", "/live-context", "/auth")
 
 
 def _is_public_path(path: str) -> bool:
@@ -71,7 +71,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict:
     """FastAPI dependency to get the current authenticated user."""
-    # MVP: use user from middleware for public API paths (sessions, transcribe, analyze)
+    # MVP: use user from middleware for public API paths
     if _is_public_path(request.url.path) and hasattr(request.state, "user"):
         return request.state.user
     if not credentials:

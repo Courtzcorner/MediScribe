@@ -79,14 +79,18 @@ class NovaTranscribeClient:
         elapsed = 0
         while elapsed < timeout:
             response = self._client.get_transcription_job(TranscriptionJobName=job_name)
-            job = response["TranscriptionJob"]
+            job = response.get("TranscriptionJob") if isinstance(response, dict) else None
+            if not isinstance(job, dict):
+                raise TranscriptionError("Transcription response missing 'TranscriptionJob' payload")
             status = job["TranscriptionJobStatus"]
 
             if status == "COMPLETED":
-                transcript_uri = job["Transcript"].get(
-                    "RedactedTranscriptFileUri",
-                    job["Transcript"]["TranscriptFileUri"],
-                )
+                transcript_data = job.get("Transcript")
+                if not isinstance(transcript_data, dict):
+                    raise TranscriptionError("Transcription completed but no transcript URI was provided")
+                transcript_uri = transcript_data.get("RedactedTranscriptFileUri") or transcript_data.get("TranscriptFileUri")
+                if not transcript_uri:
+                    raise TranscriptionError("Transcription completed but transcript file URI is empty")
                 return self._fetch_transcript_json(transcript_uri)
             elif status == "FAILED":
                 reason = job.get("FailureReason", "Unknown")
@@ -99,14 +103,34 @@ class NovaTranscribeClient:
 
     def parse_result(self, result: dict, session_id: str) -> Transcript:
         """Convert Amazon Transcribe JSON output to a Transcript model."""
+        if not isinstance(result, dict):
+            raise TranscriptionError("Invalid transcription result payload received")
+
         segments: list[TranscriptSegment] = []
-        items = result.get("results", {}).get("items", [])
-        speaker_segments = result.get("results", {}).get("speaker_labels", {}).get("segments", [])
+        results_data = result.get("results")
+        if not isinstance(results_data, dict):
+            raise TranscriptionError("Transcription result is missing the 'results' object")
+
+        items = results_data.get("items", [])
+        if not isinstance(items, list):
+            items = []
+
+        speaker_labels = results_data.get("speaker_labels", {})
+        if not isinstance(speaker_labels, dict):
+            speaker_labels = {}
+
+        speaker_segments = speaker_labels.get("segments", [])
+        if not isinstance(speaker_segments, list):
+            speaker_segments = []
 
         # Build a time → speaker map
         speaker_map: dict[tuple[float, float], str] = {}
         for seg in speaker_segments:
+            if not isinstance(seg, dict):
+                continue
             for item in seg.get("items", []):
+                if not isinstance(item, dict):
+                    continue
                 key = (float(item.get("start_time", 0)), float(item.get("end_time", 0)))
                 speaker_map[key] = seg.get("speaker_label", "spk_0")
 
@@ -116,6 +140,8 @@ class NovaTranscribeClient:
         current_end: float = 0.0
 
         for item in items:
+            if not isinstance(item, dict):
+                continue
             if item["type"] == "punctuation":
                 if current_text:
                     current_text[-1] += item["alternatives"][0]["content"]

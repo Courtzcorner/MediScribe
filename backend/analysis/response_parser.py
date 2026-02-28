@@ -37,6 +37,13 @@ class ResponseParser:
             logger.error("json_parse_failed", raw=raw_text[:500], error=str(e))
             raise AnalysisError(f"Failed to parse Claude response as JSON: {e}") from e
 
+        if not isinstance(data, dict):
+            raise AnalysisError("Claude response JSON must be an object")
+
+        key_points = data.get("key_points", [])
+        if not isinstance(key_points, list):
+            key_points = []
+
         return AnalysisResult(
             session_id=session_id,
             transcript_id=transcript_id,
@@ -46,7 +53,7 @@ class ResponseParser:
             medications=self._parse_medications(data.get("medications", [])),
             diagnoses=self._parse_diagnoses(data.get("diagnoses", [])),
             follow_up=self._parse_follow_up(data.get("follow_up")),
-            key_points=data.get("key_points", []),
+            key_points=key_points,
             patient_instructions=data.get("patient_instructions"),
         )
 
@@ -66,7 +73,9 @@ class ResponseParser:
         return text  # Let json.loads raise the error
 
     @staticmethod
-    def _parse_soap(data: dict) -> SOAPNote:
+    def _parse_soap(data: dict | None) -> SOAPNote:
+        if not isinstance(data, dict):
+            data = {}
         return SOAPNote(
             subjective=data.get("subjective", ""),
             objective=data.get("objective", ""),
@@ -75,9 +84,14 @@ class ResponseParser:
         )
 
     @staticmethod
-    def _parse_medications(items: list[dict]) -> list[Medication]:
+    def _parse_medications(items: list[dict] | None) -> list[Medication]:
+        if not isinstance(items, list):
+            return []
         result = []
         for item in items:
+            if not isinstance(item, dict):
+                logger.warning("medication_parse_skip", item=item, error="Item is not an object")
+                continue
             try:
                 result.append(
                     Medication(
@@ -94,9 +108,14 @@ class ResponseParser:
         return result
 
     @staticmethod
-    def _parse_diagnoses(items: list[dict]) -> list[Diagnosis]:
+    def _parse_diagnoses(items: list[dict] | None) -> list[Diagnosis]:
+        if not isinstance(items, list):
+            return []
         result = []
         for item in items:
+            if not isinstance(item, dict):
+                logger.warning("diagnosis_parse_skip", item=item, error="Item is not an object")
+                continue
             try:
                 severity_raw = item.get("severity")
                 status_raw = item.get("status", "new")
@@ -115,7 +134,7 @@ class ResponseParser:
 
     @staticmethod
     def _parse_follow_up(data: dict | None) -> FollowUp | None:
-        if not data:
+        if not data or not isinstance(data, dict):
             return None
         try:
             return FollowUp(

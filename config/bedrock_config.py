@@ -13,6 +13,12 @@ BEDROCK_RUNTIME_CONFIG = BotocoreConfig(
 
 # Model IDs
 CLAUDE_MODEL_ID = settings.bedrock_claude_model_id
+CLAUDE_INFERENCE_PROFILE_ID = settings.bedrock_claude_inference_profile_id
+CLAUDE_FALLBACK_MODEL_IDS = [
+    model_id.strip()
+    for model_id in settings.bedrock_claude_fallback_model_ids.split(",")
+    if model_id.strip()
+]
 NOVA_SONIC_MODEL_ID = settings.bedrock_nova_model_id
 
 # Inference parameters for Claude

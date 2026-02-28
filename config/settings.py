@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     # Bedrock
     bedrock_claude_model_id: str = "us.anthropic.claude-sonnet-4-6-20250514-v1:0"
+    bedrock_claude_inference_profile_id: str = ""
+    bedrock_claude_fallback_model_ids: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
     bedrock_nova_model_id: str = "amazon.nova-sonic-v1:0"
     transcribe_language_code: str = "en-US"
 

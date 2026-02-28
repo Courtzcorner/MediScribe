@@ -53,3 +53,9 @@ export interface AnalysisStreamEvent {
   analysis?: Analysis
   error?: string
 }
+
+export interface LiveContextData {
+  questions: string[]
+  ddx: string[]
+  notes: string
+}

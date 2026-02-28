@@ -25,6 +25,42 @@ class S3Handler:
             kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
         self._client = boto3.client("s3", **kwargs)
         self._bucket = settings.s3_bucket_name
+        self._ensure_bucket_available()
+
+    def _ensure_bucket_available(self) -> None:
+        try:
+            self._client.head_bucket(Bucket=self._bucket)
+            return
+        except ClientError as e:
+            response = e.response if isinstance(e.response, dict) else {}
+            code = str(response.get("Error", {}).get("Code", ""))
+            missing_bucket_codes = {"404", "NoSuchBucket", "NotFound"}
+            if code in missing_bucket_codes and settings.is_development:
+                self._create_bucket()
+                return
+            raise StorageError(
+                f"S3 bucket '{self._bucket}' is not accessible. "
+                f"Set S3_BUCKET_NAME to an existing bucket or create it in region {settings.s3_region}."
+            ) from e
+
+    def _create_bucket(self) -> None:
+        try:
+            kwargs = {"Bucket": self._bucket}
+            if settings.s3_region != "us-east-1":
+                kwargs["CreateBucketConfiguration"] = {
+                    "LocationConstraint": settings.s3_region
+                }
+            self._client.create_bucket(**kwargs)
+            logger.warning(
+                "s3_bucket_auto_created",
+                bucket=self._bucket,
+                region=settings.s3_region,
+            )
+        except ClientError as e:
+            raise StorageError(
+                f"S3 bucket '{self._bucket}' does not exist and could not be created automatically. "
+                f"Create it manually in {settings.s3_region} and retry."
+            ) from e
 
     def upload_audio(self, audio_bytes: bytes, key: str) -> str:
         """Upload raw audio bytes. Returns the S3 URI."""

@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import io
-
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import JSONResponse
-
-from backend.models.patient_session import PatientSession
 from backend.models.transcript import Transcript
 from backend.pipeline.orchestrator import MedicalPipelineOrchestrator
 from backend.storage.db_handler import DBHandler
-from backend.utils.error_handler import NotFoundError, TranscriptionError
+from backend.utils.error_handler import NotFoundError
 from api.middleware.auth import get_current_user
 
 router = APIRouter()
@@ -44,8 +39,9 @@ async def transcribe_audio(
     audio_bytes = await audio.read()
     ext = (audio.filename or "audio.webm").rsplit(".", 1)[-1].lower()
 
-    transcript, _ = orchestrator.process_recording(session, audio_bytes, audio_format=ext)
+    transcript, analysis = orchestrator.process_recording(session, audio_bytes, audio_format=ext)
     db.save_transcript(transcript)
+    db.save_analysis(analysis)
     db.save_session(session)
 
     return transcript
@@ -63,5 +59,4 @@ async def get_transcript(
         raise NotFoundError("Session not found")
     if not session.transcript_id:
         raise NotFoundError("Transcript not yet available for this session")
-    # In a real implementation, fetch from DB by transcript_id
-    raise NotFoundError("Transcript record retrieval not yet implemented")
+    return db.get_transcript(session.transcript_id)

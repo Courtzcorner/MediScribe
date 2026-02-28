@@ -6,6 +6,36 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Object.prototype.toString.call(value) === '[object Object]'
+}
+
+function toSnakeCase(value: string): string {
+  return value.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+}
+
+function toCamelCase(value: string): string {
+  return value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+}
+
+function normalizeRequestBody(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeRequestBody)
+  if (!isPlainObject(value)) return value
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, val]) => [toSnakeCase(key), normalizeRequestBody(val)]),
+  )
+}
+
+function normalizeResponseBody(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeResponseBody)
+  if (!isPlainObject(value)) return value
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, val]) => [toCamelCase(key), normalizeResponseBody(val)]),
+  )
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, headers, ...rest } = options
 
@@ -17,7 +47,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(normalizeRequestBody(body)) : undefined,
     ...rest,
   })
 
@@ -27,7 +57,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (res.status === 204) return undefined as T
-  return res.json()
+  const json = await res.json()
+  return normalizeResponseBody(json) as T
 }
 
 export const api = {

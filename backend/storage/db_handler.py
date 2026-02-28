@@ -5,16 +5,18 @@ transcripts, and analysis results.
 from __future__ import annotations
 
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 
 from sqlalchemy import (
     Column, String, Integer, Text, DateTime, Enum as SAEnum,
     JSON, create_engine, select, update
 )
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.models.patient_session import PatientSession, SessionStatus
-from backend.models.transcript import Transcript
+from backend.models.transcript import Transcript, TranscriptSegment
 from backend.models.analysis_result import AnalysisResult
 from backend.utils.logger import get_logger
 from backend.utils.error_handler import StorageError, NotFoundError
@@ -73,14 +75,39 @@ class AnalysisRecord(Base):
 
 
 def create_db_engine():
-    return create_engine(
-        settings.database_url,
-        pool_size=settings.db_pool_size,
-        max_overflow=settings.db_max_overflow,
-        pool_pre_ping=True,
-    )
+    def _build_engine(url: str):
+        kwargs = {"connect_args": {}} if url.startswith("sqlite") else {}
+        if url.startswith("sqlite"):
+            kwargs["connect_args"]["check_same_thread"] = False
+        else:
+            kwargs.update(
+                pool_size=settings.db_pool_size,
+                max_overflow=settings.db_max_overflow,
+                pool_pre_ping=True,
+            )
+        return create_engine(url, **kwargs)
+
+    primary_url = settings.database_url
+    engine = _build_engine(primary_url)
+
+    if settings.is_development and primary_url.startswith("postgresql"):
+        try:
+            with engine.connect():
+                pass
+        except OperationalError as exc:
+            fallback_url = "sqlite:///./mediscribe_dev.db"
+            logger.warning(
+                "PostgreSQL unavailable; using development SQLite fallback",
+                database_url=primary_url,
+                fallback_url=fallback_url,
+                error=str(exc),
+            )
+            return _build_engine(fallback_url)
+
+    return engine
 
 
+@lru_cache(maxsize=1)
 def get_session_factory():
     engine = create_db_engine()
     Base.metadata.create_all(engine)
@@ -125,6 +152,24 @@ class DBHandler:
 
     # ── Transcripts ───────────────────────────────────────────────────────────
 
+    def get_transcript(self, transcript_id: str) -> Transcript:
+        with self._session_factory() as db:
+            record = db.get(TranscriptRecord, transcript_id)
+            if not record:
+                raise NotFoundError(f"Transcript {transcript_id} not found")
+            segments = [
+                TranscriptSegment(**s) if isinstance(s, dict) else s
+                for s in record.segments
+            ]
+            return Transcript(
+                id=record.id,
+                session_id=record.session_id,
+                raw_text=record.raw_text,
+                segments=segments,
+                language=record.language,
+                word_count=record.word_count,
+            )
+
     def save_transcript(self, transcript: Transcript) -> None:
         with self._session_factory() as db:
             record = TranscriptRecord(
@@ -154,6 +199,32 @@ class DBHandler:
             )
             db.merge(record)
             db.commit()
+
+    def get_analysis_by_session(self, session_id: str) -> AnalysisResult:
+        with self._session_factory() as db:
+            stmt = (
+                select(AnalysisRecord)
+                .where(AnalysisRecord.session_id == session_id)
+                .order_by(AnalysisRecord.created_at.desc())
+                .limit(1)
+            )
+            record = db.scalar(stmt)
+            if not record:
+                raise NotFoundError(f"Analysis for session {session_id} not found")
+            return AnalysisResult(
+                id=record.id,
+                session_id=record.session_id,
+                transcript_id=record.transcript_id,
+                summary=record.summary,
+                soap_note=record.soap_note or {},
+                medications=record.medications or [],
+                diagnoses=record.diagnoses or [],
+                follow_up=record.follow_up,
+                key_points=record.key_points or [],
+                patient_instructions=record.patient_instructions,
+                model_used=record.model_used,
+                created_at=record.created_at,
+            )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

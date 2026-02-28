@@ -6,9 +6,12 @@ import { VisitTabs } from './VisitTabs'
 import { LiveContext } from './LiveContext'
 import { TreatmentPlan } from './TreatmentPlan'
 import { TranscriptPanel } from './TranscriptPanel'
+import type { Analysis } from '@/types/analysis'
 
 interface SessionVisitLayoutProps {
   sessionId: string
+  transcriptId?: string | null
+  analysis?: Analysis | null
   title?: string
   subtitle?: string
   transcriptContent?: React.ReactNode
@@ -19,6 +22,8 @@ interface SessionVisitLayoutProps {
 
 export function SessionVisitLayout({
   sessionId,
+  transcriptId,
+  analysis,
   title = 'Laasya',
   subtitle = 'New symptom evaluation',
   transcriptContent,
@@ -36,7 +41,13 @@ export function SessionVisitLayout({
 
         <div className="flex-1 overflow-auto">
           <div className="max-w-6xl mx-auto p-6">
-            <LiveContext>{liveContextContent}</LiveContext>
+            <LiveContext
+              sessionId={sessionId}
+              transcriptId={transcriptId}
+              analysis={analysis}
+            >
+              {liveContextContent}
+            </LiveContext>
             <TreatmentPlan>{treatmentContent}</TreatmentPlan>
           </div>
         </div>

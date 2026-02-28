@@ -73,6 +73,8 @@ export default function SessionDetailPage() {
   return (
     <SessionVisitLayout
       sessionId={id}
+      transcriptId={session.transcriptId}
+      analysis={analysis}
       title={session.title}
       subtitle="Clinical documentation"
       transcriptEntryCount={transcript?.segments?.length ?? 0}
