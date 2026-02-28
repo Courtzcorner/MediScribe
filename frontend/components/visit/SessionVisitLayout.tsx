@@ -9,6 +9,7 @@ import { TreatmentPlan } from './TreatmentPlan'
 import { TranscriptPanel } from './TranscriptPanel'
 import { PreVisitPanel } from './PreVisitPanel'
 import { AskPanel } from './AskPanel'
+import { PostVisitPanel } from './PostVisitPanel'
 import SOAPNote from '@/components/analysis/SOAPNote'
 import DiagnosisSummary from '@/components/analysis/DiagnosisSummary'
 import MedicationList from '@/components/analysis/MedicationList'
@@ -48,6 +49,11 @@ interface SessionVisitLayoutProps {
   // Live speech
   liveEntries?: SpeechEntry[]
   liveText?: string
+
+  // Post visit notes
+  notes?: string
+  onSaveNotes?: (notes: string) => Promise<void>
+  onCompleteVisit?: () => Promise<void>
 }
 
 function EmptyPanel({ icon, message }: { icon: React.ReactNode; message: string }) {
@@ -217,6 +223,9 @@ export function SessionVisitLayout({
   onEndEncounter,
   liveEntries = [],
   liveText = '',
+  notes = '',
+  onSaveNotes,
+  onCompleteVisit,
 }: SessionVisitLayoutProps) {
   const isRecording = recorderState === 'recording' || recorderState === 'paused'
   const [sidebarItem, setSidebarItem] = useState<SidebarItem>('clinical-focus')
@@ -339,10 +348,10 @@ export function SessionVisitLayout({
               <PreVisitPanel
                 patient={patient}
                 chiefComplaint={chiefComplaint}
-                onChiefComplaintChange={onChiefComplaintChange ?? (() => {})}
+                onChiefComplaintChange={onChiefComplaintChange ?? (() => { })}
                 visitType={visitType}
-                onVisitTypeChange={onVisitTypeChange ?? (() => {})}
-                onStartEncounter={onStartEncounter ?? (() => {})}
+                onVisitTypeChange={onVisitTypeChange ?? (() => { })}
+                onStartEncounter={onStartEncounter ?? (() => { })}
               />
             )}
 
@@ -350,11 +359,10 @@ export function SessionVisitLayout({
               <div className="space-y-6">
                 {/* Recording controls banner */}
                 {recorderState !== 'stopped' && (
-                  <div className={`rounded-xl border p-4 flex items-center gap-4 ${
-                    isRecording
+                  <div className={`rounded-xl border p-4 flex items-center gap-4 ${isRecording
                       ? 'border-red-500/30 bg-red-500/5'
                       : 'border-border bg-card'
-                  }`}>
+                    }`}>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">
                         {isRecording ? 'Recording in progress…' : 'Ready to record'}
@@ -378,9 +386,12 @@ export function SessionVisitLayout({
             )}
 
             {activeTab === 'postvisit' && (
-              <div className="space-y-6">
-                {renderSidebarContent()}
-              </div>
+              <PostVisitPanel
+                analysis={analysis}
+                existingNotes={notes}
+                onSaveNotes={onSaveNotes ?? (async () => { })}
+                onCompleteVisit={onCompleteVisit}
+              />
             )}
           </div>
         </div>

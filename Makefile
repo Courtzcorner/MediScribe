@@ -34,7 +34,7 @@ install-backend: venv ## Install Python dependencies
 	$(PIP) install -r requirements.txt
 
 venv: ## Create Python virtual environment if it doesn't exist
-	@test -d $(VENV) || (echo "$(GREEN)Creating virtual environment...$(RESET)" && python3 -m venv $(VENV))
+	@test -d $(VENV) || (echo "$(GREEN)Creating virtual environment...$(RESET)" && python3.11 -m venv $(VENV))
 
 install-frontend: ## Install Node.js dependencies
 	@echo "$(GREEN)Installing Node.js dependencies...$(RESET)"
