@@ -12,13 +12,15 @@ interface PostVisitPanelProps {
     existingNotes?: string
     onSaveNotes: (notes: string) => Promise<void>
     onCompleteVisit?: () => Promise<void>
+    supplementalContent?: React.ReactNode
 }
 
 export function PostVisitPanel({
     analysis,
     existingNotes = '',
     onSaveNotes,
-    onCompleteVisit
+    onCompleteVisit,
+    supplementalContent,
 }: PostVisitPanelProps) {
     const [notes, setNotes] = useState(existingNotes)
     const [isSaving, setIsSaving] = useState(false)
@@ -103,6 +105,20 @@ export function PostVisitPanel({
                     )}
                 </div>
             </div>
+
+            {supplementalContent && (
+                <div className="space-y-3">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                            Additional Clinical Tools
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-foreground">
+                            Review the rest of the encounter output without leaving Post-Visit
+                        </h3>
+                    </div>
+                    {supplementalContent}
+                </div>
+            )}
 
             {/* Recap Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

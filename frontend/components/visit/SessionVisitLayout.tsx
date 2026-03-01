@@ -391,6 +391,7 @@ export function SessionVisitLayout({
                 existingNotes={notes}
                 onSaveNotes={onSaveNotes ?? (async () => { })}
                 onCompleteVisit={onCompleteVisit}
+                supplementalContent={renderSidebarContent()}
               />
             )}
           </div>

@@ -6,7 +6,7 @@
 :root {
   --font-sans: 'DM Sans', Inter, system-ui, sans-serif;
   --font-size: 16px;
-  --background: #ffffff;
+  --background: #f7faf8;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
   --card-foreground: oklch(0.145 0 0);
@@ -43,6 +43,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-strong: #ffffff;
+  --surface-border: rgba(148, 163, 184, 0.2);
+  --page-gradient:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 26%),
+    radial-gradient(circle at 85% 20%, rgba(245, 158, 11, 0.1), transparent 20%),
+    linear-gradient(180deg, #f7faf8 0%, #f8fafc 48%, #eef6f2 100%);
 }
 
 .dark {
@@ -85,12 +92,37 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--background);
+  background: var(--page-gradient);
+  background-attachment: fixed;
   color: var(--foreground);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(20, 184, 166, 0.18);
+  color: inherit;
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a,
+button {
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 /* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--muted); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(226, 232, 240, 0.6); }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.7); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
