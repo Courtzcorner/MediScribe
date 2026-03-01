@@ -11,7 +11,6 @@ import { Patient } from '@/types/patient'
 import { api } from '@/lib/api-client'
 import { useRecorder } from '@/hooks/useRecorder'
 import { useLiveSpeech } from '@/hooks/useLiveSpeech'
-import { useAnalysis } from '@/hooks/useAnalysis'
 import { SessionVisitLayout } from '@/components/visit/SessionVisitLayout'
 import type { VisitTab } from '@/components/visit/VisitTabs'
 import TranscriptViewer from '@/components/transcript/TranscriptViewer'
@@ -36,7 +35,6 @@ export default function SessionDetailPage() {
 
   const recorder = useRecorder()
   const liveSpeech = useLiveSpeech()
-  const analysisHook = useAnalysis()
 
   // Flag: waiting for audioBlob after stopping
   const pendingProcessRef = useRef(false)
@@ -83,16 +81,50 @@ export default function SessionDetailPage() {
 
     const processRecording = async (blob: Blob) => {
       setProcessingError(null)
+      const sid = sessionIdRef.current
+
       try {
         const form = new FormData()
-        form.append('audio', blob, `session-${sessionIdRef.current}.webm`)
-        form.append('sessionId', sessionIdRef.current)
-        const t = await api.upload<Transcript>(`/transcribe/${sessionIdRef.current}`, form)
-        setTranscript(t)
+        form.append('audio', blob, `session-${sid}.webm`)
+        form.append('sessionId', sid)
 
-        await analysisHook.startAnalysis(sessionIdRef.current, t.id)
-        const a = await api.get<Analysis>(`/analyze/${sessionIdRef.current}`).catch(() => null)
-        setAnalysis(a)
+        // The backend pipeline (S3 + Transcribe + Claude) can take 1-3 minutes.
+        // The Next.js proxy may time out before it finishes — if so, silently fall
+        // back to polling until the session reports both transcriptId and analysisId.
+        let gotTranscript = false
+        try {
+          const t = await api.upload<Transcript>(`/transcribe/${sid}`, form)
+          setTranscript(t)
+          gotTranscript = true
+        } catch {
+          // Proxy timeout or network hiccup — backend is still processing.
+        }
+
+        if (gotTranscript) {
+          // Upload response arrived — analysis was already run by the pipeline,
+          // just fetch it (no need to re-run Claude via startAnalysis).
+          const a = await api.get<Analysis>(`/analyze/${sid}`).catch(() => null)
+          setAnalysis(a)
+        } else {
+          // Poll until the backend saves both transcript and analysis (up to 5 min).
+          const deadline = Date.now() + 5 * 60 * 1000
+          while (true) {
+            if (Date.now() > deadline) throw new Error('Processing timed out. Please refresh the page.')
+            await new Promise(r => setTimeout(r, 4000))
+            const s = await api.get<Session>(`/sessions/${sid}`)
+            if (s.status === 'failed') throw new Error('Processing failed on the server. Please try again.')
+            if (s.transcriptId && s.analysisId) {
+              const [t, a] = await Promise.all([
+                api.get<Transcript>(`/transcribe/${sid}`).catch(() => null),
+                api.get<Analysis>(`/analyze/${sid}`).catch(() => null),
+              ])
+              if (t) setTranscript(t)
+              if (a) setAnalysis(a)
+              break
+            }
+          }
+        }
+
         setActiveTab('postvisit')
       } catch (err) {
         setProcessingError(err instanceof Error ? err.message : 'Processing failed')
